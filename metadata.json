@@ -1,0 +1,6 @@
+{
+  "name": "Look",
+  "description": "A daily photography challenge to help you discover the extraordinary hidden within ordinary life.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
