@@ -52,9 +52,7 @@ fun getHighlightStyle(prompt: String): HighlightStyle {
     return styles[hash % styles.size]
 }
 
-fun extractHighlights(prompt: String): String {
-    if (prompt.contains("*")) return prompt
-    
+fun getHighlightWords(prompt: String): List<String> {
     val stopWords = setOf(
         "capture", "take", "photo", "photograph", "picture", "image", 
         "that", "this", "something", "feels", "like", "with", "from", 
@@ -70,13 +68,11 @@ fun extractHighlights(prompt: String): String {
     
     val sortedWords = words.sortedByDescending { it.length }.distinctBy { it.lowercase() }
     
-    // Select top 1-2 non-adjacent words
     val selectedWords = mutableListOf<String>()
     
     for (word in sortedWords) {
-        if (selectedWords.size >= 2) break // Max 2 highlights usually
+        if (selectedWords.size >= 2) break
         
-        // check adjacency in original prompt
         val currentIdx = prompt.indexOf(word, ignoreCase = true)
         val isAdjacent = selectedWords.any { existing ->
             val exIdx = prompt.indexOf(existing, ignoreCase = true)
@@ -85,7 +81,7 @@ fun extractHighlights(prompt: String): String {
             val firstWordLen = if (currentIdx < exIdx) word.length else existing.length
             if (minIdx + firstWordLen > prompt.length) return@any false
             val between = prompt.substring(minIdx + firstWordLen, maxIdx)
-            between.trim().length <= 3 // close enough to be adjacent
+            between.trim().length <= 3
         }
         
         if (!isAdjacent) {
@@ -93,13 +89,7 @@ fun extractHighlights(prompt: String): String {
         }
     }
     
-    var highlightedPrompt = prompt
-    for (word in selectedWords) {
-        highlightedPrompt = highlightedPrompt.replace(Regex("(?i)\\b$word\\b")) { matchResult ->
-            "*${matchResult.value}*"
-        }
-    }
-    return highlightedPrompt
+    return selectedWords
 }
 
 @Composable
@@ -137,15 +127,30 @@ fun AnimatedPromptText(
     
     val systemPrimary = MaterialTheme.colorScheme.primary
     val neutralOutline = MaterialTheme.colorScheme.outline
-    val processedText = remember(text) { extractHighlights(text) }
-    val styleType = remember(text) { getHighlightStyle(text) }
+    val cleanText = remember(text) { text.replace("*", "") }
+    val highlightWords = remember(cleanText) { getHighlightWords(cleanText) }
+    val styleType = remember(cleanText) { getHighlightStyle(cleanText) }
     
     // Animate color in
     Text(
         text = buildAnnotatedString {
-            val parts = processedText.split("*")
-            parts.forEachIndexed { index, part ->
-                if (index % 2 == 1 && part.isNotEmpty()) {
+            val sortedWords = highlightWords.sortedByDescending { it.length }
+            val regex = if (sortedWords.isNotEmpty()) {
+                Regex("(?i)\\b(${sortedWords.joinToString("|") { Regex.escape(it) }})\\b")
+            } else {
+                null
+            }
+            
+            if (regex != null) {
+                val matches = regex.findAll(cleanText)
+                var lastMatchEnd = 0
+                for (match in matches) {
+                    val part = match.value
+                    if (match.range.first > lastMatchEnd) {
+                        withStyle(style = SpanStyle(color = color.copy(alpha = color.alpha * textAlpha))) {
+                            append(cleanText.substring(lastMatchEnd, match.range.first))
+                        }
+                    }
                     pushStringAnnotation(tag = "highlight", annotation = part)
                     val wordHash = part.hashCode().absoluteValue
                     val wordPhaseOffset = (wordHash % 100) / 100f * kotlin.math.PI * 2f
@@ -154,7 +159,6 @@ fun AnimatedPromptText(
                     val accent = if (useAccentColors) getPromptAccentColor(part, isDynamicColor, systemPrimary) else color
                     val animSin = if (isStatic) 0f else kotlin.math.sin(localPhase).toFloat()
                     
-                    // Ink Shift: subtle color shift
                     val shiftColor = if (!useAccentColors) color else accent.copy(
                         red = (accent.red + animSin * 0.08f).coerceIn(0f, 1f),
                         green = (accent.green + animSin * 0.08f).coerceIn(0f, 1f),
@@ -165,10 +169,16 @@ fun AnimatedPromptText(
                         append(part)
                     }
                     pop()
-                } else {
+                    lastMatchEnd = match.range.last + 1
+                }
+                if (lastMatchEnd < cleanText.length) {
                     withStyle(style = SpanStyle(color = color.copy(alpha = color.alpha * textAlpha))) {
-                        append(part)
+                        append(cleanText.substring(lastMatchEnd))
                     }
+                }
+            } else {
+                withStyle(style = SpanStyle(color = color.copy(alpha = color.alpha * textAlpha))) {
+                    append(cleanText)
                 }
             }
         },

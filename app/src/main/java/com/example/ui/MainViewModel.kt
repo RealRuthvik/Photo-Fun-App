@@ -189,7 +189,7 @@ class MainViewModel(
                 dao.deleteAllLogs()
                 // Delete local image files
                 context.filesDir.listFiles()?.forEach { file ->
-                    if (file.name.startsWith("look_") && file.name.endsWith(".jpg")) {
+                    if (file.name.startsWith("morrow_") && file.name.endsWith(".jpg")) {
                         file.delete()
                     }
                 }
@@ -221,10 +221,10 @@ class MainViewModel(
             try {
                 val resolver = context.contentResolver
                 val contentValues = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "Look_${System.currentTimeMillis()}.jpg")
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "Morrow_${System.currentTimeMillis()}.jpg")
                     put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Look")
+                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Morrow")
                     }
                 }
                 
@@ -271,7 +271,7 @@ class MainViewModel(
     }
 
     fun createImageUri(): Uri {
-        val file = File(context.filesDir, "look_${System.currentTimeMillis()}.jpg")
+        val file = File(context.filesDir, "morrow_${System.currentTimeMillis()}.jpg")
         return FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",

@@ -181,7 +181,7 @@ object PromptDatabase {
         val novelCandidates = candidates.filter { it.first.replace("*", "").lowercase() !in cleanExcluded }
         
         if (novelCandidates.isEmpty()) {
-            return "Find a *new* way to see the world today."
+            return "Find a new way to see the world today."
         }
         
         // Score based on conceptual repetition penalty + random jitter
@@ -195,7 +195,7 @@ object PromptDatabase {
             score to candidate
         }.sortedBy { it.first }
         
-        return scoredCandidates.first().second.first
+        return scoredCandidates.first().second.first.replace("*", "")
     }
 
     fun getEngineStats(excludedPrompts: List<String>): String {

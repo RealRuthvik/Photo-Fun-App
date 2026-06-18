@@ -408,7 +408,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                             Text("Next prompt in", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "GetPrompt Now",
+                                "Get Prompt Now",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.clickable { showGetPromptNowDialog = true }.padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
@@ -754,13 +754,11 @@ fun PromptLibraryScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     val historyItem = sortedHistory[index]
                     val dateFormatted = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(historyItem.dateReceived))
                     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                        com.example.ui.components.AnimatedPromptText(
-                            text = "“${historyItem.prompt}”",
+                        Text(
+                            text = "“${historyItem.prompt.replace("*", "")}”",
                             style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
                             color = MaterialTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                            isDynamicColor = false,
-                            isStatic = true
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
                         Text(
                             text = "Used on $dateFormatted",
