@@ -22,8 +22,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import java.text.SimpleDateFormat
@@ -39,7 +42,17 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextDecoration
-
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.material.icons.filled.Close
 fun Modifier.dashedBorder(color: Color, width: Dp, radius: Dp) = this.drawBehind {
     drawRoundRect(
         color = color,
@@ -52,7 +65,7 @@ fun Modifier.dashedBorder(color: Color, width: Dp, radius: Dp) = this.drawBehind
 }
 
 @Composable
-fun TodayScreen(viewModel: MainViewModel) {
+fun TodayScreen(viewModel: MainViewModel, onSwipeStateChange: (Boolean) -> Unit = {}) {
     val activePrompt by viewModel.activePrompt.collectAsStateWithLifecycle()
     val todayLogs by viewModel.todayLogs.collectAsStateWithLifecycle()
     
@@ -79,12 +92,13 @@ fun TodayScreen(viewModel: MainViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
     ) {
         // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 48.dp, start = 24.dp, end = 24.dp),
+                .padding(top = 16.dp, start = 24.dp, end = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -96,7 +110,7 @@ fun TodayScreen(viewModel: MainViewModel) {
                 )
                 Text(
                     text = dateString,
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, fontSize = 40.sp),
                     color = MaterialTheme.colorScheme.onBackground
                 )
             }
@@ -105,19 +119,23 @@ fun TodayScreen(viewModel: MainViewModel) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 24.dp, bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(top = 32.dp)
+                .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Top
         ) {
             
-            Box(
-                modifier = Modifier
-                    .width(48.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.outline)
-            )
+            if (todayLogs.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.outline)
+                )
             
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             
             Text(
                 text = buildAnnotatedString {
@@ -134,54 +152,20 @@ fun TodayScreen(viewModel: MainViewModel) {
                     }
                     append("”")
                 },
-                style = MaterialTheme.typography.displayMedium,
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 32.sp, fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 32.dp),
+                modifier = Modifier.padding(horizontal = 24.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             
             if (todayLogs.isNotEmpty()) {
-                PhotoDeck(logs = todayLogs, modifier = Modifier.weight(1f).fillMaxWidth())
+                SwipingPhotoDeck(logs = todayLogs, onSwipeStateChange = onSwipeStateChange, modifier = Modifier.weight(1f).fillMaxWidth())
+                Spacer(modifier = Modifier.height(24.dp))
             } else {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp)
-                        .clip(RoundedCornerShape(40.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .dashedBorder(
-                            color = MaterialTheme.colorScheme.outline,
-                            width = 2.dp,
-                            radius = 40.dp
-                        )
-                        .clickable {
-                            val uri = viewModel.createImageUri()
-                            capturedUri = uri
-                            cameraLauncher.launch(uri)
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "AWAITING DISCOVERY",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.weight(1f))
             }
-            
-            Spacer(modifier = Modifier.height(32.dp))
             
             Button(
                 onClick = {
@@ -207,76 +191,8 @@ fun TodayScreen(viewModel: MainViewModel) {
                     style = MaterialTheme.typography.labelLarge
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun PhotoDeck(
-    logs: List<com.example.data.ChallengeLog>,
-    modifier: Modifier = Modifier
-) {
-    if (logs.isEmpty()) return
-    var currentIndex by remember { mutableIntStateOf(0) }
-
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        val visibleCount = minOf(4, logs.size)
-        // Reverse order so index 0 is drawn last (on top)
-        for (i in (visibleCount - 1) downTo 0) {
-            val realIndex = (currentIndex + i) % logs.size
-            val log = logs[realIndex]
             
-            val animatedScale by animateFloatAsState(
-                targetValue = 1f - (i * 0.08f),
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 100f),
-                label = "scale"
-            )
-            val animatedOffset by animateDpAsState(
-                targetValue = (i * 24).dp,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 100f),
-                label = "offset"
-            )
-            val animatedRotation by animateFloatAsState(
-                targetValue = if (i == 0) 0f else if (i % 2 == 1) 3f else -3f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 100f),
-                label = "rotation"
-            )
-            val animatedAlpha by animateFloatAsState(
-                targetValue = 1f - (i * 0.15f),
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 200f),
-                label = "alpha"
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 64.dp, top = 32.dp, start = 32.dp, end = 32.dp)
-                    .graphicsLayer {
-                        scaleX = animatedScale
-                        scaleY = animatedScale
-                        translationY = animatedOffset.toPx()
-                        rotationZ = animatedRotation
-                        alpha = animatedAlpha
-                        shadowElevation = if (i == 0) 16.dp.toPx() else 8.dp.toPx()
-                    }
-                    .clip(RoundedCornerShape(40.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        if (logs.size > 1) {
-                            currentIndex = (currentIndex + 1) % logs.size
-                        }
-                    }
-            ) {
-                AsyncImage(
-                    model = log.imagePath,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
+            Spacer(modifier = Modifier.height(84.dp).navigationBarsPadding())
         }
     }
 }

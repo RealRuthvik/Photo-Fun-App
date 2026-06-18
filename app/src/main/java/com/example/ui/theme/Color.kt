@@ -2,23 +2,28 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val LightBackground = Color(0xFFFAF9F6)
-val LightOnBackground = Color(0xFF1C1B1F)
-val LightPrimary = Color(0xFF2D2A26)
-val LightOnPrimary = Color(0xFFFFFFFF)
-val LightSurfaceVariant = Color(0xFFF2F0ED)
-val LightOnSurfaceVariant = Color(0xFF8E8B85)
-val LightOutline = Color(0xFFE5E2DD)
-val LightSurfaceContainer = Color(0xFFEBE8E2)
-val LightNavSelectedBg = Color(0xFFE7E4DF)
-val LightNavUnselectedText = Color(0xFFA3A099)
+val AmoledBlack = Color(0xFF000000)
+val DarkSurface = Color(0xFF0A0A0A)
+val DarkSurfaceVariant = Color(0xFF141414)
+val DarkOutline = Color(0xFF222222)
+val TextPrimary = Color(0xFFFFFFFF)
+val TextSecondary = Color(0xFFAAAAAA)
+val TextTertiary = Color(0xFF666666)
 
-val DarkBackground = Color(0xFF1C1B1F)
-val DarkOnBackground = Color(0xFFFAF9F6)
-val DarkPrimary = Color(0xFFFAF9F6)
-val DarkOnPrimary = Color(0xFF1C1B1F)
-val DarkSurfaceVariant = Color(0xFF2D2A26)
-val DarkOnSurfaceVariant = Color(0xFFA3A099)
-val DarkOutline = Color(0xFF3D3A36)
-val DarkSurfaceContainer = Color(0xFF2D2A26)
+val LightBackground = Color(0xFFFFFFFF)
+val LightOnBackground = Color(0xFF000000)
+val LightPrimary = Color(0xFF000000)
+val LightOnPrimary = Color(0xFFFFFFFF)
+val LightSurfaceVariant = Color(0xFFF5F5F5)
+val LightOnSurfaceVariant = Color(0xFF888888)
+val LightOutline = Color(0xFFE5E5E5)
+val LightSurfaceContainer = Color(0xFFEBEBEB)
+val LightNavSelectedBg = Color(0xFFEAEAEA)
+val LightNavUnselectedText = Color(0xFF999999)
+
+val DarkBackground = AmoledBlack
+val DarkOnBackground = TextPrimary
+val DarkPrimary = TextPrimary
+val DarkOnPrimary = AmoledBlack
+
 

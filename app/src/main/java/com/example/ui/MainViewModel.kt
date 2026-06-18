@@ -54,53 +54,6 @@ class MainViewModel(
     init {
         viewModelScope.launch {
             checkAndSetTodayPrompt()
-            generateMockData()
-        }
-    }
-
-    private suspend fun generateMockData() {
-        val logs = dao.getAllLogs().first()
-        if (logs.isEmpty()) {
-            val calendar = Calendar.getInstance()
-            calendar.add(Calendar.MONTH, -5)
-            val endDate = Calendar.getInstance()
-            
-            val mockImages = listOf(
-                "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1498307833015-e7b400441eb8?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1555169062-013468b47731?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1511884642898-4c92249e20b6?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1481349518771-20055b2a7b24?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1506744626753-1fa28f67c9fe?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1523712999610-f77fbcfc3843?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1433086966358-54859d0ed716?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1444464666168-49b626d49c6b?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1501854140801-50d01698950b?q=80&w=600&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1470071131384-001b85755536?q=80&w=600&auto=format&fit=crop"
-            )
-
-            while (calendar.timeInMillis < endDate.timeInMillis) {
-                // Generate logs for ~70% of days
-                if ((1..10).random() <= 7) {
-                    val numPhotos = (1..3).random()
-                    val prompt = PromptDatabase.getRandomPrompt()
-                    val dateStr = dateFormat.format(calendar.time)
-                    
-                    for (i in 0 until numPhotos) {
-                        val log = ChallengeLog(
-                            dateId = dateStr,
-                            prompt = prompt,
-                            imagePath = mockImages.random(),
-                            timestamp = calendar.timeInMillis + (i * 1000)
-                        )
-                        dao.insertLog(log)
-                    }
-                }
-                calendar.add(Calendar.DAY_OF_YEAR, 1)
-            }
         }
     }
 
@@ -128,12 +81,36 @@ class MainViewModel(
 
     fun saveTodayPhoto(uri: Uri) {
         viewModelScope.launch {
+            var finalUri = uri
+            try {
+                val resolver = context.contentResolver
+                val contentValues = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "Look_${System.currentTimeMillis()}.jpg")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Look")
+                    }
+                }
+                
+                val mediaStoreUri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (mediaStoreUri != null) {
+                    resolver.openOutputStream(mediaStoreUri)?.use { outStream ->
+                        resolver.openInputStream(uri)?.use { inStream ->
+                            inStream.copyTo(outStream)
+                        }
+                    }
+                    finalUri = mediaStoreUri
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
             val dateStr = getCurrentDateString()
             val prompt = activePrompt.value
             val log = ChallengeLog(
                 dateId = dateStr,
                 prompt = prompt,
-                imagePath = uri.toString(),
+                imagePath = finalUri.toString(),
                 timestamp = System.currentTimeMillis()
             )
             dao.insertLog(log)
