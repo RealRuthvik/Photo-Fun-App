@@ -16,4 +16,10 @@ interface ChallengeDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: ChallengeLog)
+
+    @Query("SELECT * FROM prompt_history ORDER BY dateReceived DESC")
+    fun getPromptHistory(): Flow<List<PromptHistory>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertPromptHistory(promptHistory: PromptHistory)
 }

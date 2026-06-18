@@ -89,7 +89,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
     }
     
     val totalPhotos = allLogs.size
-    val totalDays = allLogs.map { it.dateId }.distinct().size
+    val officialLogs = allLogs.filter { !it.isCustomPrompt }
+    val totalDays = officialLogs.map { it.dateId }.distinct().size
     val firstMemoryTimestamp = allLogs.minByOrNull { it.timestamp }?.timestamp
     val firstMemoryStr = firstMemoryTimestamp?.let {
         SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(it))
@@ -99,11 +100,35 @@ fun SettingsScreen(viewModel: MainViewModel) {
         var showPromptTimeSheet by remember { mutableStateOf(false) }
 
         val todayDate = viewModel.getCurrentDateString()
-        val hasPlayedToday = allLogs.any { it.dateId == todayDate }
+        val hasPlayedToday = officialLogs.any { it.dateId == todayDate }
         val currentStreak = if (hasPlayedToday) totalDays else maxOf(0, totalDays - 1)
 
         var showPromptLibraryWarning by remember { mutableStateOf(false) }
         var showPromptLibrary by remember { mutableStateOf(false) }
+        var showGetPromptNowDialog by remember { mutableStateOf(false) }
+
+        if (showGetPromptNowDialog) {
+            AlertDialog(
+                onDismissRequest = { showGetPromptNowDialog = false },
+                title = { Text("Get Prompt Now") },
+                text = { Text("This will replace your current prompt with a new one immediately. Custom prompts do not contribute toward daily streaks. Continue?", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                confirmButton = {
+                    TextButton(onClick = { 
+                        viewModel.generateNewCustomPrompt()
+                        showGetPromptNowDialog = false
+                    }) {
+                        Text("Get New Prompt", color = MaterialTheme.colorScheme.onBackground)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showGetPromptNowDialog = false }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onBackground)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                titleContentColor = MaterialTheme.colorScheme.onBackground
+            )
+        }
 
         if (showPromptTimeSheet) {
             ModalBottomSheet(
@@ -173,7 +198,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
         }
 
         if (showPromptLibrary) {
-            PromptLibraryScreen(onBack = { showPromptLibrary = false })
+            PromptLibraryScreen(viewModel = viewModel, onBack = { showPromptLibrary = false })
             return
         }
         
@@ -182,7 +207,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 24.dp),
-        contentPadding = PaddingValues(top = 48.dp, bottom = 120.dp),
+        contentPadding = PaddingValues(top = 48.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(32.dp)
     ) {
         item {
@@ -191,94 +216,96 @@ fun SettingsScreen(viewModel: MainViewModel) {
         
         // Daily Prompt Section
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Daily Prompt", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Daily Prompt", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                 
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                                Text("Daily Reminders", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text("Receive a notification for the daily challenge", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Switch(
-                                checked = notificationsEnabled,
-                                onCheckedChange = { isChecked ->
-                                    if (isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                                            launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                            return@Switch
-                                        }
-                                    }
-                                    coroutineScope.launch {
-                                        settingsRepo.setNotificationsEnabled(isChecked)
-                                    }
-                                }
-                            )
-                        }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showPromptTimeSheet = true }
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Notification Time", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                            Text(promptTime, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Next prompt in", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                            NextPromptTimerText()
-                        }
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.3f))
-                                .clickable(enabled = !isCountingDown) {
-                                    isCountingDown = true
-                                    countdownValue = 5
-                                    coroutineScope.launch {
-                                        while (countdownValue > 0) {
-                                            delay(1000)
-                                            countdownValue--
-                                        }
-                                        showTestNotification(context)
-                                        delay(1000)
-                                        isCountingDown = false
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AnimatedContent(
-                                targetState = isCountingDown,
-                                transitionSpec = {
-                                    fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
-                                },
-                                label = "button_content"
-                            ) { countingDown ->
-                                if (countingDown) {
-                                    Text("Notification in $countdownValue...", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                                } else {
-                                    Text("Send Test Notification", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text("Daily Reminders", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("Receive a notification for the daily challenge", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = { isChecked ->
+                            if (isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                    launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    return@Switch
                                 }
                             }
+                            coroutineScope.launch {
+                                settingsRepo.setNotificationsEnabled(isChecked)
+                            }
+                        }
+                    )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showPromptTimeSheet = true }
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Notification Time", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                    Text(promptTime, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Next prompt in", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Get Prompt Now",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable { showGetPromptNowDialog = true }.padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
+                        )
+                    }
+                    NextPromptTimerText()
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .clickable(enabled = !isCountingDown) {
+                            isCountingDown = true
+                            countdownValue = 5
+                            coroutineScope.launch {
+                                while (countdownValue > 0) {
+                                    delay(1000)
+                                    countdownValue--
+                                }
+                                showTestNotification(context)
+                                delay(1000)
+                                isCountingDown = false
+                            }
+                        },
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    AnimatedContent(
+                        targetState = isCountingDown,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                        },
+                        label = "button_content"
+                    ) { countingDown ->
+                        if (countingDown) {
+                            Text("Notification in $countdownValue...", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            Text("Send Test Notification", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -287,78 +314,90 @@ fun SettingsScreen(viewModel: MainViewModel) {
         
         // Prompt Library Section
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Prompt Engine", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.clickable { showPromptLibraryWarning = true }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Prompt Engine", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { showPromptLibraryWarning = true }.padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                            Text("Prompt Library", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("Explore examples of generated challenges", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Icon(Icons.Default.ChevronRight, contentDescription = "View Library", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text("Prompt Library", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("Explore examples of generated challenges", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Default.ChevronRight, contentDescription = "View Library", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        
+        // Gallery Stats Section
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Your Journey", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(totalPhotos.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+                        Text("Images taken", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(totalDays.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+                        Text("Days completed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(currentStreak.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+                        Text("Current streak", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(firstMemoryStr, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+                        Text("First memory", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
         
-        // Archive Stats Section
+        // Colors
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Your Journey", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            val useAccentColors by settingsRepo.useAccentColors.collectAsState(initial = true)
+            val scope = rememberCoroutineScope()
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Personalization", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Column {
-                            Text(totalPhotos.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                            Text("Images taken", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Column {
-                            Text(totalDays.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                            Text("Days completed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Column {
-                            Text(currentStreak.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                            Text("Current streak", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Column {
-                            Text(firstMemoryStr, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                            Text("First memory", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text("Use Accent Colors", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text("Apply subtle device accent colors across the UI", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    Switch(
+                        checked = useAccentColors,
+                        onCheckedChange = { checked ->
+                            scope.launch { settingsRepo.setUseAccentColors(checked) }
+                        },
+                    )
                 }
             }
         }
         
         // Your Data
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Your Data", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f))
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth().clickable{}.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Delete All Data", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Your Data", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+                Row(modifier = Modifier.fillMaxWidth().clickable{}.padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Delete All Data", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
         
         // About
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("About Morrow", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("About Morrow", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
                 Text(
                     "A daily creative practice for noticing the extraordinary hidden within ordinary life. No feeds, no followers, no algorithms. Just you, your surroundings, and the moments worth remembering.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -394,25 +433,58 @@ fun NextPromptTimerText() {
 }
 
 @Composable
-fun PromptLibraryScreen(onBack: () -> Unit) {
+fun PromptLibraryScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val samplePrompts = remember { 
         listOf(
-            "A morning shadow stretching across the floor",
-            "Something that has been broken and repaired",
-            "The way light reflects off a glass of water",
-            "A forgotten object on a window sill",
-            "The texture of your favorite piece of clothing",
-            "A quiet corner of your neighborhood",
-            "Something that represents the passing of time",
-            "A familiar view from an unfamiliar angle",
-            "The remnants of a meal",
-            "An object you interact with every day but rarely look at",
-            "A juxtaposition of nature and architecture",
-            "The color yellow in an unexpected place"
+            "A morning shadow stretching remarkably long across the floor",
+            "Something that has been visibly broken and lovingly repaired",
+            "The way harsh light reflects off a clear glass of water",
+            "A forgotten, nostalgic object resting on a window sill",
+            "The comforting texture of your favorite, worn-out piece of clothing",
+            "A quiet, overlooked corner of your bustling neighborhood",
+            "Something that subtly represents the inevitable passing of time",
+            "A familiar, everyday view observed from an entirely unfamiliar angle",
+            "The strangely beautiful remnants of a shared meal",
+            "An object you interact with daily but rarely pause to truly look at",
+            "A striking juxtaposition of wild nature and rigid architecture",
+            "The vivid color yellow emerging in an entirely unexpected place",
+            "A stranger's expression caught in a fleeting moment of joy",
+            "The complex, geometric pattern created by intersecting power lines",
+            "Something that makes you inevitably smile when you notice it",
+            "A small detail that hints at a much larger, untold story",
+            "The undeniable contrast between something incredibly soft and sharp",
+            "A reflection that distorts reality in an interesting way"
         ).shuffled()
     }
     
     var promptsList by remember { mutableStateOf(samplePrompts.take(6)) }
+    val promptHistory by viewModel.promptHistory.collectAsStateWithLifecycle()
+    
+    var selectedPrompt by remember { mutableStateOf<String?>(null) }
+    
+    if (selectedPrompt != null) {
+        AlertDialog(
+            onDismissRequest = { selectedPrompt = null },
+            title = { Text("Use This Prompt") },
+            text = { Text("This prompt will replace your current daily challenge. Library prompts are considered custom prompts and do not contribute toward daily streaks. Continue?", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            confirmButton = {
+                TextButton(onClick = { 
+                    viewModel.replacePromptWithCustom(selectedPrompt!!, true)
+                    selectedPrompt = null
+                    onBack()
+                }) {
+                    Text("Use This Prompt", color = MaterialTheme.colorScheme.onBackground)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedPrompt = null }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onBackground)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            titleContentColor = MaterialTheme.colorScheme.onBackground
+        )
+    }
     
     Column(
         modifier = Modifier
@@ -437,21 +509,42 @@ fun PromptLibraryScreen(onBack: () -> Unit) {
         
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (promptHistory.isNotEmpty()) {
+                item {
+                    Text("Used Prompts", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp, top = 8.dp))
+                }
+                items(promptHistory.size) { index ->
+                    Column(modifier = Modifier.fillMaxWidth().clickable { selectedPrompt = promptHistory[index].prompt }.padding(vertical = 8.dp)) {
+                        Text(
+                            text = "“${promptHistory[index].prompt}”",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    }
+                }
+                
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+
+            item {
+                Text("Generated Examples", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp, top = if (promptHistory.isEmpty()) 8.dp else 0.dp))
+            }
             items(promptsList.size) { index ->
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Column(modifier = Modifier.fillMaxWidth().clickable { selectedPrompt = promptsList[index] }.padding(vertical = 8.dp)) {
                     Text(
                         text = "“${promptsList[index]}”",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(24.dp)
+                        modifier = Modifier.padding(bottom = 16.dp)
                     )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 }
             }
         }

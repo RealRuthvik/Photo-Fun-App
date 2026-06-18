@@ -50,6 +50,13 @@ class MainViewModel(
         )
 
     val activePrompt = MutableStateFlow("")
+    val activePromptIsCustom = MutableStateFlow(false)
+
+    val promptHistory = dao.getPromptHistory().stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
 
     init {
         viewModelScope.launch {
@@ -61,14 +68,48 @@ class MainViewModel(
         val currentStr = getCurrentDateString()
         val storedDate = settingsRepo.todayDate.first()
         val storedPrompt = settingsRepo.todayPrompt.first()
+        val storedIsCustom = settingsRepo.todayPromptIsCustom.first()
 
         if (storedDate != currentStr || storedPrompt.isNullOrEmpty()) {
             val newPrompt = PromptDatabase.getRandomPrompt()
-            settingsRepo.setTodayPrompt(currentStr, newPrompt)
+            settingsRepo.setTodayPrompt(currentStr, newPrompt, false)
             activePrompt.value = newPrompt
+            activePromptIsCustom.value = false
+            
+            // Save official prompt to history
+            dao.insertPromptHistory(com.example.data.PromptHistory(prompt = newPrompt, dateReceived = System.currentTimeMillis()))
         } else {
             activePrompt.value = storedPrompt
+            activePromptIsCustom.value = storedIsCustom
         }
+    }
+
+    fun replacePromptWithCustom(newPrompt: String, savePreviousToHistory: Boolean = true) {
+        viewModelScope.launch {
+            val currentPrompt = activePrompt.value
+            val isCustom = activePromptIsCustom.value
+            val currentStr = getCurrentDateString()
+            
+            if (savePreviousToHistory && !isCustom && currentPrompt.isNotEmpty()) {
+                // If it was an official prompt and not yet in history, it should already be there. 
+                // However, we can proactively ensure the new prompt gets in history if we wanted.
+                // Actually the requirement says: "Add the previous prompt to prompt history."
+                // Since official prompts are added on generation, we don't need to add it again, 
+                // unless we want custom prompts to also go to history? 
+                // "Replace the currently active prompt. Add the previous prompt to prompt history." 
+                // (It's already in history when generated, but we can just insert anyway, REPLACE handles duplicates if we had unique constraints. IGNORE will ignore duplicate primary keys but it doesn't have one on prompt).
+                // Let's just insert to be safe, it's fine if it appears multiple times.
+                dao.insertPromptHistory(com.example.data.PromptHistory(prompt = currentPrompt, dateReceived = System.currentTimeMillis()))
+            }
+            
+            settingsRepo.setTodayPrompt(currentStr, newPrompt, true)
+            activePrompt.value = newPrompt
+            activePromptIsCustom.value = true
+        }
+    }
+
+    fun generateNewCustomPrompt() {
+        replacePromptWithCustom(PromptDatabase.getRandomPrompt(), true)
     }
 
     fun getCurrentDateString(): String {
@@ -107,11 +148,13 @@ class MainViewModel(
 
             val dateStr = getCurrentDateString()
             val prompt = activePrompt.value
+            val isCustom = activePromptIsCustom.value
             val log = ChallengeLog(
                 dateId = dateStr,
                 prompt = prompt,
                 imagePath = finalUri.toString(),
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                isCustomPrompt = isCustom
             )
             dao.insertLog(log)
         }

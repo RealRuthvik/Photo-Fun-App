@@ -36,6 +36,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+
 @Composable
 fun AppNavHost(viewModel: MainViewModel) {
     val pagerState = rememberPagerState(pageCount = { 3 })
@@ -43,7 +54,6 @@ fun AppNavHost(viewModel: MainViewModel) {
     var isSwipingImage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             BottomNavigationBar(
                 currentPage = pagerState.currentPage,
@@ -81,7 +91,6 @@ fun BottomNavigationBar(currentPage: Int, onPageSelected: (Int) -> Unit) {
     )
 
     NavigationBar(
-        modifier = Modifier.height(72.dp),
         containerColor = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp
@@ -99,8 +108,8 @@ fun BottomNavigationBar(currentPage: Int, onPageSelected: (Int) -> Unit) {
                 },
                 label = { Text(item.title) },
                 colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
+                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
@@ -114,3 +123,4 @@ data class BottomNavItem(
     val selectedIcon: androidx.compose.ui.graphics.vector.ImageVector,
     val unselectedIcon: androidx.compose.ui.graphics.vector.ImageVector
 )
+

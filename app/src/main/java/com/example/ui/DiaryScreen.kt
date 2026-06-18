@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -82,7 +83,7 @@ fun DiaryScreen(viewModel: MainViewModel) {
                     val date = monthFormat.parse(month)
                     date?.let { displayFormat.format(it) } ?: month
                 } catch (e: Exception) { month }
-            } ?: "Archive"
+            } ?: "Gallery"
 
             Box {
                 Row(
@@ -121,14 +122,32 @@ fun DiaryScreen(viewModel: MainViewModel) {
         }
 
         if (logs.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                contentAlignment = Alignment.Center
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Icon(
+                    Icons.Outlined.DateRange,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Awaiting your first discovery.",
+                    text = "A space for your memories",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Your daily captures will appear here over time, building a personal collection of meaningful moments.",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color.DarkGray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
         } else {

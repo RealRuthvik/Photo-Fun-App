@@ -36,6 +36,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.text.buildAnnotatedString
@@ -137,25 +138,84 @@ fun TodayScreen(viewModel: MainViewModel, onSwipeStateChange: (Boolean) -> Unit 
                 Spacer(modifier = Modifier.height(16.dp))
             }
             
+            var textLayoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+            val phase by androidx.compose.animation.core.rememberInfiniteTransition(label = "wave_transition").animateFloat(
+                initialValue = 0f,
+                targetValue = (2.0 * Math.PI).toFloat(),
+                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                    animation = androidx.compose.animation.core.tween(2000, easing = androidx.compose.animation.core.LinearEasing)
+                ),
+                label = "wave_phase"
+            )
+            val accentColor = MaterialTheme.colorScheme.primary
+
             Text(
                 text = buildAnnotatedString {
                     append("“")
                     val parts = activePrompt.split("*")
                     parts.forEachIndexed { index, part ->
                         if (index % 2 == 1) { // odd means surrounded by *
-                            withStyle(style = SpanStyle(textDecoration = TextDecoration.Underline, color = MaterialTheme.colorScheme.onBackground)) {
+                            pushStringAnnotation(tag = "highlight", annotation = part)
+                            withStyle(style = SpanStyle(color = accentColor)) {
                                 append(part)
                             }
+                            pop()
                         } else {
                             append(part)
                         }
                     }
                     append("”")
                 },
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 32.sp, fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontSize = 32.sp, 
+                    fontWeight = FontWeight.Normal, // Softer editorial feel
+                    lineHeight = 44.sp,
+                    letterSpacing = (-0.5).sp
+                ),
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 24.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .drawBehind { // Wavy underline
+                        textLayoutResult?.let { layout ->
+                            val highlights = layout.layoutInput.text.getStringAnnotations("highlight", 0, layout.layoutInput.text.length)
+                            highlights.forEach { annotation ->
+                                val start = annotation.start
+                                val end = annotation.end
+                                val boundingBox = layout.getBoundingBox(start)
+                                val endBox = layout.getBoundingBox(end - 1)
+                                
+                                val yOffset = boundingBox.bottom + 4.dp.toPx()
+                                val startX = boundingBox.left
+                                val endX = endBox.right
+                                
+                                val wavePath = androidx.compose.ui.graphics.Path()
+                                val waveLength = 24.dp.toPx()
+                                val amplitude = 2.dp.toPx()
+                                
+                                wavePath.moveTo(startX, yOffset)
+                                var currentX = startX
+                                while (currentX < endX) {
+                                    val nextX = minOf(currentX + 2.dp.toPx(), endX)
+                                    // Move phase in place rather than sliding
+                                    val sineY = yOffset + amplitude * kotlin.math.sin((currentX / waveLength) * 2 * Math.PI + kotlin.math.sin(phase.toDouble()) * Math.PI).toFloat()
+                                    wavePath.lineTo(nextX, sineY)
+                                    currentX = nextX
+                                }
+                                
+                                drawPath(
+                                    path = wavePath,
+                                    color = accentColor.copy(alpha = 0.6f),
+                                    style = Stroke(
+                                        width = 2.5.dp.toPx(),
+                                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                                        join = androidx.compose.ui.graphics.StrokeJoin.Round
+                                    )
+                                )
+                            }
+                        }
+                    },
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                onTextLayout = { textLayoutResult = it }
             )
             
             Spacer(modifier = Modifier.height(24.dp))
