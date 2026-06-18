@@ -85,4 +85,10 @@ class SettingsRepository(private val context: Context) {
             preferences[WINDOW_END_HOUR] = hour.toLong()
         }
     }
+
+    suspend fun clearAll() {
+        context.dataStore.edit { preferences ->
+            preferences.clear()
+        }
+    }
 }

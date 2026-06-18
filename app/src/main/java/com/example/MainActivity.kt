@@ -18,13 +18,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.util.Haptics.init(this)
         enableEdgeToEdge()
+        intent?.let { handleIntent(it) }
         setContent {
             val useAccentColors = viewModel.settingsRepo.useAccentColors.collectAsState(initial = true).value
 
             MyApplicationTheme(useAccentColors = useAccentColors) {
                 AppNavHost(viewModel = viewModel)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: android.content.Intent) {
+        val launchedFromNotification = intent.getBooleanExtra("launched_from_notification", false)
+        if (launchedFromNotification) {
+            viewModel.triggerPromptReveal()
         }
     }
 }

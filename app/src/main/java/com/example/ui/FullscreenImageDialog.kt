@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
@@ -46,7 +47,7 @@ fun FullscreenImageDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 24.dp)
-                    .padding(top = 80.dp, bottom = 48.dp),
+                    .padding(top = 64.dp, bottom = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -69,12 +70,14 @@ fun FullscreenImageDialog(
                     color = Color.Gray
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "“${log.prompt.replace("*", "")}”",
-                    style = MaterialTheme.typography.titleLarge,
+                com.example.ui.components.AnimatedPromptText(
+                    text = "“${log.prompt}”",
+                    style = MaterialTheme.typography.titleLarge.copy(lineHeight = 32.sp),
                     color = Color.White,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    isDynamicColor = false,
+                    useAccentColors = true
                 )
             }
             

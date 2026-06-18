@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +70,7 @@ fun Modifier.dashedBorder(color: Color, width: Dp, radius: Dp) = this.drawBehind
 fun TodayScreen(viewModel: MainViewModel, onSwipeStateChange: (Boolean) -> Unit = {}) {
     val activePrompt by viewModel.activePrompt.collectAsStateWithLifecycle()
     val todayLogs by viewModel.todayLogs.collectAsStateWithLifecycle()
+    val useAccentColors by viewModel.settingsRepo.useAccentColors.collectAsStateWithLifecycle(initialValue = true)
     
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     
@@ -120,115 +122,90 @@ fun TodayScreen(viewModel: MainViewModel, onSwipeStateChange: (Boolean) -> Unit 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 32.dp)
-                .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)),
+                .padding(top = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
         ) {
             
-            if (todayLogs.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .width(40.dp)
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.outline)
-                )
-            
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            
-            var textLayoutResult by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
-            val phase by androidx.compose.animation.core.rememberInfiniteTransition(label = "wave_transition").animateFloat(
-                initialValue = 0f,
-                targetValue = (2.0 * Math.PI).toFloat(),
-                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-                    animation = androidx.compose.animation.core.tween(2000, easing = androidx.compose.animation.core.LinearEasing)
-                ),
-                label = "wave_phase"
-            )
-            val accentColor = MaterialTheme.colorScheme.primary
-
-            Text(
-                text = buildAnnotatedString {
-                    append("“")
-                    val parts = activePrompt.split("*")
-                    parts.forEachIndexed { index, part ->
-                        if (index % 2 == 1) { // odd means surrounded by *
-                            pushStringAnnotation(tag = "highlight", annotation = part)
-                            withStyle(style = SpanStyle(color = accentColor)) {
-                                append(part)
-                            }
-                            pop()
-                        } else {
-                            append(part)
-                        }
+            androidx.compose.animation.AnimatedContent(
+                targetState = todayLogs.isNotEmpty(),
+                transitionSpec = {
+                    androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(800, delayMillis = 150)) togetherWith
+                    androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(500)) using
+                    androidx.compose.animation.SizeTransform { initialSize, targetSize ->
+                        androidx.compose.animation.core.spring(dampingRatio = 0.8f, stiffness = 100f)
                     }
-                    append("”")
                 },
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = 32.sp, 
-                    fontWeight = FontWeight.Normal, // Softer editorial feel
-                    lineHeight = 44.sp,
-                    letterSpacing = (-0.5).sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier
-                    .padding(horizontal = 32.dp)
-                    .drawBehind { // Wavy underline
-                        textLayoutResult?.let { layout ->
-                            val highlights = layout.layoutInput.text.getStringAnnotations("highlight", 0, layout.layoutInput.text.length)
-                            highlights.forEach { annotation ->
-                                val start = annotation.start
-                                val end = annotation.end
-                                val boundingBox = layout.getBoundingBox(start)
-                                val endBox = layout.getBoundingBox(end - 1)
-                                
-                                val yOffset = boundingBox.bottom + 4.dp.toPx()
-                                val startX = boundingBox.left
-                                val endX = endBox.right
-                                
-                                val wavePath = androidx.compose.ui.graphics.Path()
-                                val waveLength = 24.dp.toPx()
-                                val amplitude = 2.dp.toPx()
-                                
-                                wavePath.moveTo(startX, yOffset)
-                                var currentX = startX
-                                while (currentX < endX) {
-                                    val nextX = minOf(currentX + 2.dp.toPx(), endX)
-                                    // Move phase in place rather than sliding
-                                    val sineY = yOffset + amplitude * kotlin.math.sin((currentX / waveLength) * 2 * Math.PI + kotlin.math.sin(phase.toDouble()) * Math.PI).toFloat()
-                                    wavePath.lineTo(nextX, sineY)
-                                    currentX = nextX
-                                }
-                                
-                                drawPath(
-                                    path = wavePath,
-                                    color = accentColor.copy(alpha = 0.6f),
-                                    style = Stroke(
-                                        width = 2.5.dp.toPx(),
-                                        cap = androidx.compose.ui.graphics.StrokeCap.Round,
-                                        join = androidx.compose.ui.graphics.StrokeJoin.Round
-                                    )
-                                )
-                            }
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                label = "HomeContentTransition"
+            ) { hasLogs ->
+                if (hasLogs) {
+                    Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        // Photo is Hero
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(3.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.outline)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        SwipingPhotoDeck(logs = todayLogs, onSwipeStateChange = onSwipeStateChange, modifier = Modifier.weight(1f).fillMaxWidth())
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        val revealTrigger = viewModel.showNotificationReveal.collectAsState().value
+                        LaunchedEffect(activePrompt, revealTrigger) {
+                            com.example.util.Haptics.softPulse()
                         }
-                    },
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                onTextLayout = { textLayoutResult = it }
-            )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            if (todayLogs.isNotEmpty()) {
-                SwipingPhotoDeck(logs = todayLogs, onSwipeStateChange = onSwipeStateChange, modifier = Modifier.weight(1f).fillMaxWidth())
-                Spacer(modifier = Modifier.height(24.dp))
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
+                        androidx.compose.runtime.key(revealTrigger) {
+                            com.example.ui.components.AnimatedPromptText(
+                                text = "“$activePrompt”",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    lineHeight = 28.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 32.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                isDynamicColor = false,
+                                useAccentColors = useAccentColors
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+                } else {
+                    Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        // Prompt is Hero
+                        Spacer(modifier = Modifier.weight(1f))
+                        val revealTrigger = viewModel.showNotificationReveal.collectAsState().value
+                        LaunchedEffect(activePrompt, revealTrigger) {
+                            com.example.util.Haptics.softPulse()
+                        }
+                        androidx.compose.runtime.key(revealTrigger) {
+                            com.example.ui.components.AnimatedPromptText(
+                                text = "“$activePrompt”",
+                                style = MaterialTheme.typography.headlineMedium.copy(
+                                    fontSize = 36.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    lineHeight = 48.sp,
+                                    letterSpacing = (-0.5).sp
+                                ),
+                                color = MaterialTheme.colorScheme.onBackground,
+                                modifier = Modifier.padding(horizontal = 32.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                isDynamicColor = false,
+                                useAccentColors = useAccentColors
+                            )
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
             
             Button(
                 onClick = {
+                    com.example.util.Haptics.mediumPulse()
                     val uri = viewModel.createImageUri()
                     capturedUri = uri
                     cameraLauncher.launch(uri)
@@ -252,7 +229,7 @@ fun TodayScreen(viewModel: MainViewModel, onSwipeStateChange: (Boolean) -> Unit 
                 )
             }
             
-            Spacer(modifier = Modifier.height(84.dp).navigationBarsPadding())
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

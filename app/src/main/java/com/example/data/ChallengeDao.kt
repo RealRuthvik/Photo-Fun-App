@@ -22,4 +22,13 @@ interface ChallengeDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertPromptHistory(promptHistory: PromptHistory)
+
+    @Query("DELETE FROM prompt_history WHERE prompt = :prompt")
+    suspend fun deletePromptHistory(prompt: String)
+
+    @Query("DELETE FROM challenge_log")
+    suspend fun deleteAllLogs()
+
+    @Query("DELETE FROM prompt_history")
+    suspend fun deleteAllPromptHistory()
 }

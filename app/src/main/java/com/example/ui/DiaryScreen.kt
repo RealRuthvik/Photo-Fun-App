@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -90,7 +91,12 @@ fun DiaryScreen(viewModel: MainViewModel) {
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { if (months.size > 1) showMonthSelector = true },
+                    ) { 
+                        if (months.size > 1) {
+                            com.example.util.Haptics.softPulse()
+                            showMonthSelector = true 
+                        }
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -112,6 +118,7 @@ fun DiaryScreen(viewModel: MainViewModel) {
                         DropdownMenuItem(
                             text = { Text(mLabel, style = MaterialTheme.typography.bodyLarge) },
                             onClick = { 
+                                com.example.util.Haptics.softPulse()
                                 selectedMonth = month
                                 showMonthSelector = false 
                             }
@@ -283,38 +290,80 @@ fun DayViewDialog(dayLogs: List<ChallengeLog>, onDismiss: () -> Unit) {
                     parsed?.let { displayFormat.format(it) } ?: dayLogs.first().dateId
                 } catch (e: Exception) { dayLogs.first().dateId }
                 
-                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                    Text(
-                        text = displayDate,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "“${dayLogs.first().prompt.replace("*", "")}”",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp)
+                val logsByPrompt = remember(dayLogs) { dayLogs.groupBy { it.prompt } }
+                
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(32.dp)
                 ) {
-                    items(dayLogs) { log ->
-                        AsyncImage(
-                            model = log.imagePath,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { selectedLog = log }
+                    item {
+                        Text(
+                            text = displayDate,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
+                    }
+                    
+                    logsByPrompt.forEach { (prompt, sessionLogs) ->
+                        item {
+                            Column {
+                                val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+                                val firstLogTime = timeFormat.format(java.util.Date(sessionLogs.first().timestamp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "$firstLogTime • ${sessionLogs.size} Photo${if(sessionLogs.size > 1) "s" else ""}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                
+                                com.example.ui.components.AnimatedPromptText(
+                                    text = "“$prompt”",
+                                    style = MaterialTheme.typography.titleMedium.copy(lineHeight = 24.sp),
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    isDynamicColor = false,
+                                    isStatic = true,
+                                    useAccentColors = true
+                                )
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                // Internal grid for session logs
+                                val columns = 3
+                                val rows = (sessionLogs.size + columns - 1) / columns
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    for (r in 0 until rows) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            for (c in 0 until columns) {
+                                                val i = r * columns + c
+                                                if (i < sessionLogs.size) {
+                                                    val log = sessionLogs[i]
+                                                    AsyncImage(
+                                                        model = log.imagePath,
+                                                        contentDescription = null,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .aspectRatio(1f)
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .clickable { selectedLog = log }
+                                                    )
+                                                } else {
+                                                    Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))

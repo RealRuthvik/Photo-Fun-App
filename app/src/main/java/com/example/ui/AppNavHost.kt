@@ -43,6 +43,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.unit.sp
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
@@ -53,29 +56,97 @@ fun AppNavHost(viewModel: MainViewModel) {
     val coroutineScope = rememberCoroutineScope()
     var isSwipingImage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-    Scaffold(
-        bottomBar = {
-            BottomNavigationBar(
-                currentPage = pagerState.currentPage,
-                onPageSelected = { selectedPage ->
-                    coroutineScope.launch {
-                        pagerState.animateScrollToPage(selectedPage)
+    val isDeletingData by viewModel.isDeletingData.collectAsState()
+    val isChangingPrompt by viewModel.isChangingPrompt.collectAsState()
+    val changePromptStage by viewModel.changePromptStage.collectAsState()
+    val deleteAnimationStage by viewModel.deleteAnimationStage.collectAsState()
+    val deleteAnimationTriggered by viewModel.deleteAnimationTriggered.collectAsState()
+
+    androidx.compose.runtime.LaunchedEffect(isDeletingData, isChangingPrompt) {
+        if (!isDeletingData && !isChangingPrompt && !deleteAnimationTriggered && pagerState.currentPage != 0) {
+            pagerState.scrollToPage(0)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            bottomBar = {
+                BottomNavigationBar(
+                    currentPage = pagerState.currentPage,
+                    onPageSelected = { selectedPage ->
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(selectedPage)
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues).background(MaterialTheme.colorScheme.background)) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1,
+                    userScrollEnabled = !isSwipingImage
+                ) { page ->
+                    when (page) {
+                        0 -> TodayScreen(viewModel = viewModel, onSwipeStateChange = { isSwipingImage = it })
+                        1 -> DiaryScreen(viewModel = viewModel)
+                        2 -> SettingsScreen(viewModel = viewModel)
                     }
                 }
-            )
+            }
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues).background(MaterialTheme.colorScheme.background)) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                beyondViewportPageCount = 1,
-                userScrollEnabled = !isSwipingImage
-            ) { page ->
-                when (page) {
-                    0 -> TodayScreen(viewModel = viewModel, onSwipeStateChange = { isSwipingImage = it })
-                    1 -> DiaryScreen(viewModel = viewModel)
-                    2 -> SettingsScreen(viewModel = viewModel)
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isDeletingData || isChangingPrompt,
+            enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(1200)),
+            exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(1200)),
+            modifier = Modifier.fillMaxSize().zIndex(100f)
+        ) {
+            val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "reset_transition")
+            val alpha by infiniteTransition.animateFloat(
+                initialValue = 0.4f,
+                targetValue = 0.9f,
+                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                    animation = androidx.compose.animation.core.tween(1500, easing = androidx.compose.animation.core.LinearEasing),
+                    repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                ),
+                label = "reset_alpha"
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.animation.AnimatedContent(
+                    targetState = if (isDeletingData) deleteAnimationStage else changePromptStage,
+                    transitionSpec = {
+                        androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(500)) togetherWith
+                        androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(500))
+                    },
+                    label = "AnimationMessage"
+                ) { stage ->
+                    val message = when {
+                        isDeletingData && stage == 1 -> "Turning the page."
+                        isDeletingData && stage == 2 -> "Ready for new memories."
+                        isChangingPrompt && stage == 1 -> "Finding a fresh perspective..."
+                        isChangingPrompt && stage == 2 -> "New prompt ready."
+                        else -> ""
+                    }
+                    if (message.isNotEmpty()) {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Light,
+                                letterSpacing = 2.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = alpha),
+                            modifier = Modifier.padding(32.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
             }
         }
@@ -91,9 +162,10 @@ fun BottomNavigationBar(currentPage: Int, onPageSelected: (Int) -> Unit) {
     )
 
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp
+        containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        tonalElevation = 0.dp,
+        windowInsets = WindowInsets.navigationBars
     ) {
         items.forEach { item ->
             val selected = currentPage == item.page

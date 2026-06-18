@@ -9,6 +9,9 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,6 +32,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +52,8 @@ fun SettingsScreen(viewModel: MainViewModel) {
     
     val notificationsEnabled by settingsRepo.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
     val allLogs by viewModel.allLogs.collectAsStateWithLifecycle()
+    val activePrompt by viewModel.activePrompt.collectAsStateWithLifecycle()
+    val promptHistory by viewModel.promptHistory.collectAsStateWithLifecycle()
     
     var isCountingDown by remember { mutableStateOf(false) }
     var countdownValue by remember { mutableIntStateOf(5) }
@@ -76,13 +82,49 @@ fun SettingsScreen(viewModel: MainViewModel) {
         }
     }
 
-    fun showTestNotification(context: Context) {
+    fun showTestNotification(context: Context, activePrompt: String) {
         createNotificationChannel(context)
+        
+        val titles = listOf(
+            "✦ Today's Prompt",
+            "✦ Today's Perspective",
+            "✦ Something to Notice Today",
+            "✦ A New Way to Look",
+            "✦ Today's Discovery",
+            "✦ Today's Challenge"
+        )
+        
+        val footers = listOf(
+            "See what you notice today.",
+            "A new perspective is waiting.",
+            "Take a closer look.",
+            "Today's moment is waiting.",
+            "Capture something worth remembering."
+        )
+        
+        val title = titles.random()
+        val textBody = "$activePrompt\n\n${footers.random()}"
+        
+        val style = NotificationCompat.BigTextStyle()
+            .bigText(textBody)
+            
+        val intent = android.content.Intent(context, com.example.MainActivity::class.java).apply {
+            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("launched_from_notification", true)
+        }
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            context, 0, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+            
         val builder = NotificationCompat.Builder(context, "MORROW_CHANNEL")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setContentTitle("Morrow Test")
-            .setContentText("This is a test notification for Morrow!")
+            .setContentTitle("✦ Test Notification ($title)")
+            .setContentText("This is how your daily prompts will appear.")
+            .setStyle(style)
+            .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(1001, builder.build())
@@ -107,21 +149,116 @@ fun SettingsScreen(viewModel: MainViewModel) {
         var showPromptLibrary by remember { mutableStateOf(false) }
         var showGetPromptNowDialog by remember { mutableStateOf(false) }
 
+        var showDeleteWarning1 by remember { mutableStateOf(false) }
+
         if (showGetPromptNowDialog) {
             AlertDialog(
                 onDismissRequest = { showGetPromptNowDialog = false },
                 title = { Text("Get Prompt Now") },
-                text = { Text("This will replace your current prompt with a new one immediately. Custom prompts do not contribute toward daily streaks. Continue?", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                text = { Text("This will replace your current prompt. Custom prompts do not contribute toward daily streaks.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 confirmButton = {
                     TextButton(onClick = { 
                         viewModel.generateNewCustomPrompt()
                         showGetPromptNowDialog = false
                     }) {
-                        Text("Get New Prompt", color = MaterialTheme.colorScheme.onBackground)
+                        Text("Continue", color = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showGetPromptNowDialog = false }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onBackground)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                titleContentColor = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        var deleteImages by remember { mutableStateOf(false) }
+        var deletePromptHistory by remember { mutableStateOf(false) }
+        var showDeleteWarning2 by remember { mutableStateOf(false) }
+
+        LaunchedEffect(showDeleteWarning1) {
+            if (showDeleteWarning1) {
+                com.example.util.Haptics.softPulse()
+            }
+        }
+        LaunchedEffect(showDeleteWarning2) {
+            if (showDeleteWarning2) {
+                com.example.util.Haptics.strongPulse()
+            }
+        }
+
+        if (showDeleteWarning1) {
+            AlertDialog(
+                onDismissRequest = { showDeleteWarning1 = false },
+                title = { Text("Delete Data") },
+                text = { 
+                    Column {
+                        Text("Select the data you wish to permanently remove. This action cannot be undone.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { deleteImages = !deleteImages }.padding(vertical = 8.dp)
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = deleteImages,
+                                onCheckedChange = { deleteImages = it }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Images & Memories", color = MaterialTheme.colorScheme.onBackground)
+                        }
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { deletePromptHistory = !deletePromptHistory }.padding(vertical = 8.dp)
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = deletePromptHistory,
+                                onCheckedChange = { deletePromptHistory = it }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Prompt History", color = MaterialTheme.colorScheme.onBackground)
+                        }
+                    }
+                },
+                confirmButton = {
+                    val isEnabled = deleteImages || deletePromptHistory
+                    TextButton(
+                        onClick = { 
+                            showDeleteWarning1 = false
+                            showDeleteWarning2 = true
+                        },
+                        enabled = isEnabled
+                    ) {
+                        Text("Continue", color = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteWarning1 = false }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onBackground)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                titleContentColor = MaterialTheme.colorScheme.onBackground
+            )
+        }
+
+        if (showDeleteWarning2) {
+            AlertDialog(
+                onDismissRequest = { showDeleteWarning2 = false },
+                title = { Text("Are you absolutely sure?") },
+                text = { Text("This action cannot be undone.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                confirmButton = {
+                    TextButton(onClick = { 
+                        showDeleteWarning2 = false
+                        viewModel.triggerDeleteAnimation(deleteImages, deletePromptHistory)
+                    }) {
+                        Text("Delete Selected Data", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteWarning2 = false }) {
                         Text("Cancel", color = MaterialTheme.colorScheme.onBackground)
                     }
                 },
@@ -148,7 +285,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     Text("Your daily challenge is ready at 6:00 AM. When would you like to be reminded?", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    val options = listOf("Morning", "Noon", "Evening", "Surprise Me")
+                    val options = listOf("Morning", "Noon", "Evening", "Random")
                     options.forEach { option ->
                         val isSelected = option == promptTime
                         Row(
@@ -202,13 +339,16 @@ fun SettingsScreen(viewModel: MainViewModel) {
             return
         }
         
+    val useAccentColors by settingsRepo.useAccentColors.collectAsState(initial = true)
+    val scope = rememberCoroutineScope()
+    
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 24.dp),
-        contentPadding = PaddingValues(top = 48.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(32.dp)
+        contentPadding = PaddingValues(top = 48.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(48.dp)
     ) {
         item {
             Text("Journey", style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.onBackground)
@@ -216,154 +356,188 @@ fun SettingsScreen(viewModel: MainViewModel) {
         
         // Daily Prompt Section
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Daily Prompt", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Daily Prompts", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                        Text("Daily Reminders", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text("Receive a notification for the daily challenge", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(
-                        checked = notificationsEnabled,
-                        onCheckedChange = { isChecked ->
-                            if (isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                                    launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    return@Switch
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                            Text("Daily Reminders", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Receive a notification for the daily challenge.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = notificationsEnabled,
+                            onCheckedChange = { isChecked ->
+                                com.example.util.Haptics.softPulse()
+                                if (isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        return@Switch
+                                    }
+                                }
+                                coroutineScope.launch {
+                                    settingsRepo.setNotificationsEnabled(isChecked)
                                 }
                             }
-                            coroutineScope.launch {
-                                settingsRepo.setNotificationsEnabled(isChecked)
-                            }
-                        }
-                    )
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showPromptTimeSheet = true }
-                        .padding(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Notification Time", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                    Text(promptTime, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Next prompt in", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "Get Prompt Now",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { showGetPromptNowDialog = true }.padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
                         )
                     }
-                    NextPromptTimerText()
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .clickable(enabled = !isCountingDown) {
-                            isCountingDown = true
-                            countdownValue = 5
-                            coroutineScope.launch {
-                                while (countdownValue > 0) {
-                                    delay(1000)
-                                    countdownValue--
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showPromptTimeSheet = true }
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Notification Time", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                        Text(promptTime, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Next prompt in", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "GetPrompt Now",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable { showGetPromptNowDialog = true }.padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
+                            )
+                        }
+                        NextPromptTimerText()
+                    }
+                    
+                    var countdownJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+                    
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .clickable(enabled = !isCountingDown) {
+                                if (!isCountingDown) {
+                                    isCountingDown = true
+                                    countdownValue = 5
+                                    countdownJob = coroutineScope.launch {
+                                        while (countdownValue > 0) {
+                                            delay(1000)
+                                            countdownValue--
+                                        }
+                                        showTestNotification(context, activePrompt)
+                                        delay(1000)
+                                        isCountingDown = false
+                                    }
                                 }
-                                showTestNotification(context)
-                                delay(1000)
-                                isCountingDown = false
+                            },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        AnimatedContent(
+                            targetState = isCountingDown,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
+                            },
+                            label = "button_content"
+                        ) { countingDown ->
+                            if (countingDown) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Notification in $countdownValue...", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        "Cancel", 
+                                        style = MaterialTheme.typography.labelLarge, 
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.clickable {
+                                            countdownJob?.cancel()
+                                            isCountingDown = false
+                                            countdownValue = 0
+                                        }.padding(8.dp)
+                                    )
+                                }
+                            } else {
+                                Text("Send Test Notification", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                        },
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    AnimatedContent(
-                        targetState = isCountingDown,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(300)) togetherWith fadeOut(animationSpec = tween(300))
-                        },
-                        label = "button_content"
-                    ) { countingDown ->
-                        if (countingDown) {
-                            Text("Notification in $countdownValue...", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            Text("Send Test Notification", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
             }
         }
         
-        // Prompt Library Section
+        // Explore Section
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Prompt Engine", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Explore", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { showPromptLibraryWarning = true }.padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
-                        Text("Prompt Library", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text("Explore examples of generated challenges", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Prompt Library", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Explore examples of generated challenges", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Icon(Icons.Default.ChevronRight, contentDescription = "View Library", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.ChevronRight, contentDescription = "View Library", tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
         
-        // Gallery Stats Section
+        // Your Journey Section
         item {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Your Journey", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 4.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(totalPhotos.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                        Text("Images taken", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Your Journey", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                
+                Column {
+                    JourneyStatCard(
+                        value = totalPhotos.toString(),
+                        label = "Images Taken",
+                        useAccentColors = useAccentColors
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        JourneyStatCard(
+                            value = totalDays.toString(),
+                            label = "Days Completed",
+                            useAccentColors = useAccentColors,
+                            modifier = Modifier.weight(1f)
+                        )
+                        JourneyStatCard(
+                            value = "$currentStreak",
+                            label = "Current Streak",
+                            useAccentColors = useAccentColors,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(totalDays.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                        Text("Days completed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(currentStreak.toString(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                        Text("Current streak", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(firstMemoryStr, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                        Text("First memory", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    JourneyStatCard(
+                        value = firstMemoryStr,
+                        label = "First Memory",
+                        useAccentColors = useAccentColors,
+                        isSmallValue = true
+                    )
                 }
             }
         }
         
-        // Colors
+        // Appearance Section
         item {
-            val useAccentColors by settingsRepo.useAccentColors.collectAsState(initial = true)
-            val scope = rememberCoroutineScope()
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Personalization", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Appearance", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -377,6 +551,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     Switch(
                         checked = useAccentColors,
                         onCheckedChange = { checked ->
+                            com.example.util.Haptics.softPulse()
                             scope.launch { settingsRepo.setUseAccentColors(checked) }
                         },
                     )
@@ -384,26 +559,47 @@ fun SettingsScreen(viewModel: MainViewModel) {
             }
         }
         
-        // Your Data
+        // Data Section
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Your Data", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-                Row(modifier = Modifier.fillMaxWidth().clickable{}.padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Data", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { showDeleteWarning1 = true }.padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text("Delete All Data", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
         
-        // About
+        // About Section
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("About Morrow", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("About Morrow", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                
                 Text(
                     "A daily creative practice for noticing the extraordinary hidden within ordinary life. No feeds, no followers, no algorithms. Just you, your surroundings, and the moments worth remembering.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
                 )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = "Morrow Logo",
+                        modifier = Modifier.size(120.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Thank you for using Marrow",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -434,46 +630,39 @@ fun NextPromptTimerText() {
 
 @Composable
 fun PromptLibraryScreen(viewModel: MainViewModel, onBack: () -> Unit) {
-    val samplePrompts = remember { 
-        listOf(
-            "A morning shadow stretching remarkably long across the floor",
-            "Something that has been visibly broken and lovingly repaired",
-            "The way harsh light reflects off a clear glass of water",
-            "A forgotten, nostalgic object resting on a window sill",
-            "The comforting texture of your favorite, worn-out piece of clothing",
-            "A quiet, overlooked corner of your bustling neighborhood",
-            "Something that subtly represents the inevitable passing of time",
-            "A familiar, everyday view observed from an entirely unfamiliar angle",
-            "The strangely beautiful remnants of a shared meal",
-            "An object you interact with daily but rarely pause to truly look at",
-            "A striking juxtaposition of wild nature and rigid architecture",
-            "The vivid color yellow emerging in an entirely unexpected place",
-            "A stranger's expression caught in a fleeting moment of joy",
-            "The complex, geometric pattern created by intersecting power lines",
-            "Something that makes you inevitably smile when you notice it",
-            "A small detail that hints at a much larger, untold story",
-            "The undeniable contrast between something incredibly soft and sharp",
-            "A reflection that distorts reality in an interesting way"
-        ).shuffled()
+    val promptHistory by viewModel.promptHistory.collectAsStateWithLifecycle()
+    val allLogs by viewModel.allLogs.collectAsStateWithLifecycle()
+    val activePrompt by viewModel.activePrompt.collectAsStateWithLifecycle()
+    
+    var promptsList by remember { mutableStateOf<List<String>>(emptyList()) }
+    
+    LaunchedEffect(promptHistory, allLogs, activePrompt) {
+        if (promptsList.isEmpty()) {
+            val used = promptHistory.map { it.prompt }.toSet() + allLogs.map { it.prompt } + activePrompt
+            val generated = mutableListOf<String>()
+            repeat(6) {
+                generated.add(com.example.data.PromptDatabase.getUnusedPrompt((used + generated).toList()))
+            }
+            promptsList = generated
+        }
     }
     
-    var promptsList by remember { mutableStateOf(samplePrompts.take(6)) }
-    val promptHistory by viewModel.promptHistory.collectAsStateWithLifecycle()
-    
     var selectedPrompt by remember { mutableStateOf<String?>(null) }
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
     
     if (selectedPrompt != null) {
         AlertDialog(
             onDismissRequest = { selectedPrompt = null },
             title = { Text("Use This Prompt") },
-            text = { Text("This prompt will replace your current daily challenge. Library prompts are considered custom prompts and do not contribute toward daily streaks. Continue?", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+            text = { Text("This prompt will replace your current daily challenge. Library prompts do not contribute toward daily streaks.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 TextButton(onClick = { 
-                    viewModel.replacePromptWithCustom(selectedPrompt!!, true)
+                    com.example.util.Haptics.strongPulse()
+                    viewModel.triggerPromptReplacementAnimation(selectedPrompt)
                     selectedPrompt = null
                     onBack()
                 }) {
-                    Text("Use This Prompt", color = MaterialTheme.colorScheme.onBackground)
+                    Text("Use Prompt", color = MaterialTheme.colorScheme.onBackground)
                 }
             },
             dismissButton = {
@@ -502,8 +691,30 @@ fun PromptLibraryScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
             }
             Text("Prompt Library", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground, modifier = Modifier.weight(1f))
-            TextButton(onClick = { promptsList = samplePrompts.shuffled().take(6) }) {
-                Text("Refresh", color = MaterialTheme.colorScheme.onBackground)
+            if (selectedTabIndex == 0) {
+                TextButton(onClick = { 
+                    val used = promptHistory.map { it.prompt }.toSet() + allLogs.map { it.prompt } + activePrompt
+                    val generated = mutableListOf<String>()
+                    repeat(6) {
+                        generated.add(com.example.data.PromptDatabase.getUnusedPrompt((used + generated).toList()))
+                    }
+                    promptsList = generated
+                }) {
+                    Text("Refresh", color = MaterialTheme.colorScheme.onBackground)
+                }
+            }
+        }
+        
+        TabRow(
+            selectedTabIndex = selectedTabIndex,
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground
+        ) {
+            Tab(selected = selectedTabIndex == 0, onClick = { selectedTabIndex = 0 }) {
+                Text("Generated Examples", modifier = Modifier.padding(16.dp))
+            }
+            Tab(selected = selectedTabIndex == 1, onClick = { selectedTabIndex = 1 }) {
+                Text("Used Prompts", modifier = Modifier.padding(16.dp))
             }
         }
         
@@ -512,41 +723,85 @@ fun PromptLibraryScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (promptHistory.isNotEmpty()) {
-                item {
-                    Text("Used Prompts", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp, top = 8.dp))
-                }
-                items(promptHistory.size) { index ->
-                    Column(modifier = Modifier.fillMaxWidth().clickable { selectedPrompt = promptHistory[index].prompt }.padding(vertical = 8.dp)) {
+            if (selectedTabIndex == 0) {
+                items(promptsList.size) { index ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { 
+                                com.example.util.Haptics.softPulse()
+                                selectedPrompt = promptsList[index] 
+                            }
+                            .padding(vertical = 8.dp)
+                    ) {
                         Text(
-                            text = "“${promptHistory[index].prompt}”",
-                            style = MaterialTheme.typography.bodyLarge,
+                            text = "“${promptsList[index]}”",
+                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
                             color = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     }
                 }
-                
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
+                if (promptsList.isEmpty()) {
+                    item {
+                        Text("No unseen examples available right now.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 32.dp))
+                    }
                 }
-            }
-
-            item {
-                Text("Generated Examples", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp, top = if (promptHistory.isEmpty()) 8.dp else 0.dp))
-            }
-            items(promptsList.size) { index ->
-                Column(modifier = Modifier.fillMaxWidth().clickable { selectedPrompt = promptsList[index] }.padding(vertical = 8.dp)) {
-                    Text(
-                        text = "“${promptsList[index]}”",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            } else {
+                val sortedHistory = promptHistory.sortedByDescending { it.dateReceived }
+                items(sortedHistory.size) { index ->
+                    val historyItem = sortedHistory[index]
+                    val dateFormatted = SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(historyItem.dateReceived))
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        com.example.ui.components.AnimatedPromptText(
+                            text = "“${historyItem.prompt}”",
+                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                            isDynamicColor = false,
+                            isStatic = true
+                        )
+                        Text(
+                            text = "Used on $dateFormatted",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    }
+                }
+                if (promptHistory.isEmpty()) {
+                    item {
+                        Text("You haven't used any prompts yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 32.dp))
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+fun JourneyStatCard(
+    value: String,
+    label: String,
+    useAccentColors: Boolean,
+    modifier: Modifier = Modifier,
+    isSmallValue: Boolean = false
+) {
+    Column(modifier = modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Text(
+            text = value,
+            style = if (isSmallValue) MaterialTheme.typography.titleLarge else MaterialTheme.typography.displayMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label, 
+            style = MaterialTheme.typography.bodyLarge, 
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
