@@ -68,23 +68,94 @@ class MainViewModel(
         viewModelScope.launch {
             checkAndSetTodayPrompt()
         }
+        
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(1000)
+                var nextRefreshTime = settingsRepo.nextRefreshTime.first()
+                val currentMode = settingsRepo.promptMode.first()
+                if (nextRefreshTime <= 0L) {
+                    setupNextRefreshTime(currentMode)
+                    nextRefreshTime = settingsRepo.nextRefreshTime.first()
+                }
+                
+                if (System.currentTimeMillis() >= nextRefreshTime) {
+                    // Time to refresh
+                    val used = promptHistory.value.map { it.prompt } + allLogs.value.map { it.prompt } + activePrompt.value
+                    val newPrompt = PromptDatabase.getUnusedPrompt(used.distinct())
+                    
+                    settingsRepo.setTodayPrompt(getCurrentDateString(), newPrompt, false)
+                    activePrompt.value = newPrompt
+                    activePromptIsCustom.value = false
+                    dao.insertPromptHistory(com.example.data.PromptHistory(prompt = newPrompt, dateReceived = System.currentTimeMillis()))
+                    
+                    setupNextRefreshTime(currentMode)
+                    
+                    val shouldNotify = settingsRepo.notificationsEnabled.first()
+                    if (shouldNotify) {
+                        try {
+                            val clazz = Class.forName("com.example.ui.SettingsScreenKt")
+                            val method = clazz.getMethod("showTestNotification", Context::class.java, String::class.java)
+                            method.invoke(null, context, newPrompt)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun setupNextRefreshTime(mode: String) {
+        val calendar = Calendar.getInstance()
+        val now = calendar.timeInMillis
+        when (mode) {
+            "Morning" -> {
+                calendar.set(Calendar.HOUR_OF_DAY, 10)
+                calendar.set(Calendar.MINUTE, 0)
+            }
+            "Noon" -> {
+                calendar.set(Calendar.HOUR_OF_DAY, 12)
+                calendar.set(Calendar.MINUTE, 0)
+            }
+            "Evening" -> {
+                calendar.set(Calendar.HOUR_OF_DAY, 17)
+                calendar.set(Calendar.MINUTE, 0)
+            }
+            "Random" -> {
+                calendar.set(Calendar.HOUR_OF_DAY, (9..20).random())
+                calendar.set(Calendar.MINUTE, (0..59).random())
+            }
+        }
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        
+        if (calendar.timeInMillis <= now) {
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+            // for random, recalculate time for next day
+            if (mode == "Random") {
+                calendar.set(Calendar.HOUR_OF_DAY, (9..20).random())
+                calendar.set(Calendar.MINUTE, (0..59).random())
+            }
+        }
+        
+        settingsRepo.setNextRefreshTime(calendar.timeInMillis)
     }
 
     private suspend fun checkAndSetTodayPrompt() {
-        val currentStr = getCurrentDateString()
-        val storedDate = settingsRepo.todayDate.first()
         val storedPrompt = settingsRepo.todayPrompt.first()
         val storedIsCustom = settingsRepo.todayPromptIsCustom.first()
 
-        if (storedDate != currentStr || storedPrompt.isNullOrEmpty()) {
+        if (storedPrompt.isNullOrEmpty()) {
             val used = promptHistory.value.map { it.prompt } + allLogs.value.map { it.prompt }
             val newPrompt = PromptDatabase.getUnusedPrompt(used.distinct())
-            settingsRepo.setTodayPrompt(currentStr, newPrompt, false)
+            settingsRepo.setTodayPrompt(getCurrentDateString(), newPrompt, false)
             activePrompt.value = newPrompt
             activePromptIsCustom.value = false
             
             // Save official prompt to history
             dao.insertPromptHistory(com.example.data.PromptHistory(prompt = newPrompt, dateReceived = System.currentTimeMillis()))
+            setupNextRefreshTime(settingsRepo.promptMode.first())
         } else {
             activePrompt.value = storedPrompt
             activePromptIsCustom.value = storedIsCustom

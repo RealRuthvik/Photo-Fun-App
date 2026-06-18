@@ -43,6 +43,68 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+fun createNotificationChannel(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val name = "Daily Reminders"
+        val descriptionText = "Notifications for Morrow challenges"
+        val importance = NotificationManager.IMPORTANCE_DEFAULT
+        val channel = NotificationChannel("MORROW_CHANNEL", name, importance).apply {
+            description = descriptionText
+        }
+        val notificationManager: NotificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
+    }
+}
+
+fun showTestNotification(context: Context, activePrompt: String) {
+    createNotificationChannel(context)
+        
+    val titles = listOf(
+        "✦ Today's Prompt",
+        "✦ Today's Perspective",
+        "✦ Something to Notice Today",
+        "✦ A New Way to Look",
+        "✦ Today's Discovery",
+        "✦ Today's Challenge"
+    )
+        
+    val footers = listOf(
+        "See what you notice today.",
+        "A new perspective is waiting.",
+        "Take a closer look.",
+        "Today's moment is waiting.",
+        "Capture something worth remembering."
+    )
+        
+    val title = titles.random()
+    val textBody = "$activePrompt\n\n${footers.random()}"
+        
+    val style = NotificationCompat.BigTextStyle()
+        .bigText(textBody)
+            
+    val intent = android.content.Intent(context, com.example.MainActivity::class.java).apply {
+        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+        putExtra("launched_from_notification", true)
+    }
+    val pendingIntent = android.app.PendingIntent.getActivity(
+        context, 0, intent,
+        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+    )
+            
+    val builder = NotificationCompat.Builder(context, "MORROW_CHANNEL")
+        .setSmallIcon(android.R.drawable.ic_menu_camera)
+        .setContentTitle("✦ Test Notification ($title)")
+        .setContentText("This is how your daily prompts will appear.")
+        .setStyle(style)
+        .setContentIntent(pendingIntent)
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setAutoCancel(true)
+
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    notificationManager.notify(1001, builder.build())
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
@@ -68,68 +130,6 @@ fun SettingsScreen(viewModel: MainViewModel) {
         }
     }
     
-    fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Daily Reminders"
-            val descriptionText = "Notifications for Morrow challenges"
-            val importance = NotificationManager.IMPORTANCE_DEFAULT
-            val channel = NotificationChannel("MORROW_CHANNEL", name, importance).apply {
-                description = descriptionText
-            }
-            val notificationManager: NotificationManager =
-                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
-    }
-
-    fun showTestNotification(context: Context, activePrompt: String) {
-        createNotificationChannel(context)
-        
-        val titles = listOf(
-            "✦ Today's Prompt",
-            "✦ Today's Perspective",
-            "✦ Something to Notice Today",
-            "✦ A New Way to Look",
-            "✦ Today's Discovery",
-            "✦ Today's Challenge"
-        )
-        
-        val footers = listOf(
-            "See what you notice today.",
-            "A new perspective is waiting.",
-            "Take a closer look.",
-            "Today's moment is waiting.",
-            "Capture something worth remembering."
-        )
-        
-        val title = titles.random()
-        val textBody = "$activePrompt\n\n${footers.random()}"
-        
-        val style = NotificationCompat.BigTextStyle()
-            .bigText(textBody)
-            
-        val intent = android.content.Intent(context, com.example.MainActivity::class.java).apply {
-            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
-            putExtra("launched_from_notification", true)
-        }
-        val pendingIntent = android.app.PendingIntent.getActivity(
-            context, 0, intent,
-            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-        )
-            
-        val builder = NotificationCompat.Builder(context, "MORROW_CHANNEL")
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setContentTitle("✦ Test Notification ($title)")
-            .setContentText("This is how your daily prompts will appear.")
-            .setStyle(style)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(1001, builder.build())
-    }
-    
     val totalPhotos = allLogs.size
     val officialLogs = allLogs.filter { !it.isCustomPrompt }
     val totalDays = officialLogs.map { it.dateId }.distinct().size
@@ -138,7 +138,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
         SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(Date(it))
     } ?: "No memories yet"
     
-        var promptTime by remember { mutableStateOf("Morning") }
+        val promptTime by viewModel.settingsRepo.promptMode.collectAsStateWithLifecycle(initialValue = "Morning")
         var showPromptTimeSheet by remember { mutableStateOf(false) }
 
         val todayDate = viewModel.getCurrentDateString()
@@ -294,7 +294,10 @@ fun SettingsScreen(viewModel: MainViewModel) {
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)
                                 .clickable { 
-                                    promptTime = option
+                                    coroutineScope.launch {
+                                        viewModel.settingsRepo.setPromptMode(option)
+                                        viewModel.setupNextRefreshTime(option)
+                                    }
                                     showPromptTimeSheet = false 
                                 }
                                 .padding(16.dp),
@@ -414,7 +417,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                                 modifier = Modifier.clickable { showGetPromptNowDialog = true }.padding(top = 4.dp, bottom = 4.dp, end = 8.dp)
                             )
                         }
-                        NextPromptTimerText()
+                        NextPromptTimerText(promptTime)
                     }
                     
                     var countdownJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
@@ -579,7 +582,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                 Text("About Morrow", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 
                 Text(
-                    "A daily creative practice for noticing the extraordinary hidden within ordinary life. No feeds, no followers, no algorithms. Just you, your surroundings, and the moments worth remembering.",
+                    "Most people take photos when something important happens. This app helps people discover that important things are happening every day, they just need a reason to notice them.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
@@ -594,7 +597,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Thank you for using Marrow",
+                        text = "Thank you for using Morrow",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -606,26 +609,51 @@ fun SettingsScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-fun NextPromptTimerText() {
-    var timeUntilNext by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        while(true) {
-            val calendar = java.util.Calendar.getInstance()
-            val now = calendar.timeInMillis
-            calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
-            calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-            calendar.set(java.util.Calendar.MINUTE, 0)
-            calendar.set(java.util.Calendar.SECOND, 0)
-            calendar.set(java.util.Calendar.MILLISECOND, 0)
-            val diff = calendar.timeInMillis - now
-            val hours = diff / (1000 * 60 * 60)
-            val minutes = (diff / (1000 * 60)) % 60
-            val seconds = (diff / 1000) % 60
-            timeUntilNext = String.format("%02d:%02d:%02d", hours, minutes, seconds)
-            delay(1000)
+fun NextPromptTimerText(mode: String) {
+    if (mode == "Random") {
+        var randomText by remember { mutableStateOf("??:??:??") }
+        LaunchedEffect(Unit) {
+            val chars = listOf('?', '#')
+            while (true) {
+                val newStr = StringBuilder("??:??:??")
+                val replaceIdx = (0..7).random()
+                if (replaceIdx != 2 && replaceIdx != 5) {
+                    newStr[replaceIdx] = chars.random()
+                }
+                val replaceIdx2 = (0..7).random()
+                if (replaceIdx2 != 2 && replaceIdx2 != 5) {
+                    newStr[replaceIdx2] = chars.random()
+                }
+                randomText = newStr.toString()
+                delay((100..400).random().toLong())
+            }
         }
+        Text(randomText, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+    } else {
+        var timeUntilNext by remember { mutableStateOf("") }
+        val context = LocalContext.current
+        val viewModel = androidx.lifecycle.viewmodel.compose.viewModel<com.example.ui.MainViewModel>(
+            factory = com.example.ui.MainViewModel.Factory(context.applicationContext)
+        )
+        val nextRefreshTime by viewModel.settingsRepo.nextRefreshTime.collectAsStateWithLifecycle(initialValue = 0L)
+        
+        LaunchedEffect(nextRefreshTime) {
+            while(true) {
+                val now = System.currentTimeMillis()
+                val diff = nextRefreshTime - now
+                if (diff <= 0) {
+                    timeUntilNext = "00:00:00"
+                } else {
+                    val hours = diff / (1000 * 60 * 60)
+                    val minutes = (diff / (1000 * 60)) % 60
+                    val seconds = (diff / 1000) % 60
+                    timeUntilNext = String.format("%02d:%02d:%02d", hours, minutes, seconds)
+                }
+                delay(1000)
+            }
+        }
+        Text(timeUntilNext, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
     }
-    Text(timeUntilNext, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
 }
 
 @Composable
@@ -735,7 +763,7 @@ fun PromptLibraryScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             .padding(vertical = 8.dp)
                     ) {
                         Text(
-                            text = "“${promptsList[index]}”",
+                            text = "“${promptsList[index].replace("*", "")}”",
                             style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
                             color = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.padding(bottom = 16.dp)

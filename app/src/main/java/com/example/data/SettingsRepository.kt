@@ -16,6 +16,8 @@ class SettingsRepository(private val context: Context) {
 
     companion object {
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val PROMPT_MODE = androidx.datastore.preferences.core.stringPreferencesKey("prompt_mode")
+        val NEXT_REFRESH_TIME = longPreferencesKey("next_refresh_time")
         val WINDOW_START_HOUR = longPreferencesKey("window_start_hour")
         val WINDOW_END_HOUR = longPreferencesKey("window_end_hour")
         val TODAY_DATE = androidx.datastore.preferences.core.stringPreferencesKey("today_date")
@@ -23,6 +25,22 @@ class SettingsRepository(private val context: Context) {
         val TODAY_PROMPT_IS_CUSTOM = booleanPreferencesKey("today_prompt_is_custom")
         val USE_ACCENT_COLORS = booleanPreferencesKey("use_accent_colors")
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
+    }
+
+    val promptMode: Flow<String> = context.dataStore.data.map { it[PROMPT_MODE] ?: "Morning" }
+    
+    suspend fun setPromptMode(mode: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PROMPT_MODE] = mode
+        }
+    }
+
+    val nextRefreshTime: Flow<Long> = context.dataStore.data.map { it[NEXT_REFRESH_TIME] ?: 0L }
+
+    suspend fun setNextRefreshTime(timeMs: Long) {
+        context.dataStore.edit { preferences ->
+            preferences[NEXT_REFRESH_TIME] = timeMs
+        }
     }
 
     val onboardingComplete: Flow<Boolean> = context.dataStore.data.map { it[ONBOARDING_COMPLETE] ?: false }
