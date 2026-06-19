@@ -28,8 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,11 +47,13 @@ import java.util.Locale
 
 fun createNotificationChannel(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val name = "Daily Reminders"
-        val descriptionText = "Notifications for Morrow challenges"
+        val name = "Daily Prompts"
+        val descriptionText = "Notifications for Morrow daily photography challenges"
         val importance = NotificationManager.IMPORTANCE_DEFAULT
         val channel = NotificationChannel("MORROW_CHANNEL", name, importance).apply {
             description = descriptionText
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 150)
         }
         val notificationManager: NotificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -60,28 +64,8 @@ fun createNotificationChannel(context: Context) {
 fun showTestNotification(context: Context, activePrompt: String) {
     createNotificationChannel(context)
         
-    val titles = listOf(
-        "✦ Today's Prompt",
-        "✦ Today's Perspective",
-        "✦ Something to Notice Today",
-        "✦ A New Way to Look",
-        "✦ Today's Discovery",
-        "✦ Today's Challenge"
-    )
-        
-    val footers = listOf(
-        "See what you notice today.",
-        "A new perspective is waiting.",
-        "Take a closer look.",
-        "Today's moment is waiting.",
-        "Capture something worth remembering."
-    )
-        
-    val title = titles.random()
-    val textBody = "$activePrompt\n\n${footers.random()}"
-        
     val style = NotificationCompat.BigTextStyle()
-        .bigText(textBody)
+        .bigText(activePrompt)
             
     val intent = android.content.Intent(context, com.example.MainActivity::class.java).apply {
         flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -92,10 +76,26 @@ fun showTestNotification(context: Context, activePrompt: String) {
         android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
     )
             
+    val drawable = androidx.core.content.ContextCompat.getDrawable(context, com.example.R.mipmap.ic_launcher)
+    val largeIconBitmap = if (drawable != null) {
+        val bmp = android.graphics.Bitmap.createBitmap(
+            Math.max(1, drawable.intrinsicWidth),
+            Math.max(1, drawable.intrinsicHeight),
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val canvas = android.graphics.Canvas(bmp)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        bmp
+    } else {
+        android.graphics.BitmapFactory.decodeResource(context.resources, com.example.R.mipmap.ic_launcher)
+    }
+    
     val builder = NotificationCompat.Builder(context, "MORROW_CHANNEL")
-        .setSmallIcon(android.R.drawable.ic_menu_camera)
-        .setContentTitle("✦ Test Notification ($title)")
-        .setContentText("This is how your daily prompts will appear.")
+        .setSmallIcon(com.example.R.drawable.ic_launcher_foreground)
+        .setLargeIcon(largeIconBitmap)
+        .setContentTitle("A new photography challenge is here!")
+        .setContentText(activePrompt)
         .setStyle(style)
         .setContentIntent(pendingIntent)
         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -111,6 +111,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val settingsRepo = viewModel.settingsRepo
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     
     val notificationsEnabled by settingsRepo.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
     val allLogs by viewModel.allLogs.collectAsStateWithLifecycle()
@@ -436,9 +437,15 @@ fun SettingsScreen(viewModel: MainViewModel) {
                                     countdownValue = 5
                                     com.example.receiver.PromptAlarmReceiver.scheduleTestNotification(context, 5000, activePrompt)
                                     countdownJob = coroutineScope.launch {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         while (countdownValue > 0) {
                                             delay(1000)
                                             countdownValue--
+                                            if (countdownValue > 0) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            } else {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            }
                                         }
                                         delay(1000)
                                         isCountingDown = false
@@ -474,7 +481,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                                     )
                                 }
                             } else {
-                                Text("Send Test Notification", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Send Notification", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }

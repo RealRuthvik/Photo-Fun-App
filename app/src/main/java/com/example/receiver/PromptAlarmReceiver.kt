@@ -22,7 +22,7 @@ class PromptAlarmReceiver : BroadcastReceiver() {
         val action = intent.action
         
         if (action == "com.example.TEST_NOTIFICATION") {
-            val activePrompt = intent.getStringExtra("active_prompt") ?: "✦ Today's Prompt"
+            val activePrompt = intent.getStringExtra("active_prompt") ?: "Get your camera ready for today's challenge."
             showTestNotification(context, activePrompt)
             return
         }
