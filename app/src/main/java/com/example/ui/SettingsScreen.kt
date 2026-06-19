@@ -143,7 +143,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
 
         val todayDate = viewModel.getCurrentDateString()
         val hasPlayedToday = officialLogs.any { it.dateId == todayDate }
-        val currentStreak = if (hasPlayedToday) totalDays else maxOf(0, totalDays - 1)
+        val currentStreak = viewModel.calculateCurrentStreak(officialLogs)
 
         var showPromptLibraryWarning by remember { mutableStateOf(false) }
         var showPromptLibrary by remember { mutableStateOf(false) }
@@ -398,7 +398,11 @@ fun SettingsScreen(viewModel: MainViewModel) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Notification Time", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                            Text("Prompt Delivery Schedule", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Controls when a new prompt is generated and when notifications arrive.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         Text(promptTime, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                     }
                     
@@ -430,12 +434,12 @@ fun SettingsScreen(viewModel: MainViewModel) {
                                 if (!isCountingDown) {
                                     isCountingDown = true
                                     countdownValue = 5
+                                    com.example.receiver.PromptAlarmReceiver.scheduleTestNotification(context, 5000, activePrompt)
                                     countdownJob = coroutineScope.launch {
                                         while (countdownValue > 0) {
                                             delay(1000)
                                             countdownValue--
                                         }
-                                        showTestNotification(context, activePrompt)
                                         delay(1000)
                                         isCountingDown = false
                                     }
@@ -463,6 +467,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
                                         color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.clickable {
                                             countdownJob?.cancel()
+                                            com.example.receiver.PromptAlarmReceiver.cancelTestNotification(context)
                                             isCountingDown = false
                                             countdownValue = 0
                                         }.padding(8.dp)

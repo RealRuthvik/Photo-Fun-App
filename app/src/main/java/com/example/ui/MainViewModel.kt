@@ -70,8 +70,22 @@ class MainViewModel(
         }
         
         viewModelScope.launch {
+            settingsRepo.todayPrompt.collect { prompt ->
+                if (prompt != null) {
+                    activePrompt.value = prompt
+                }
+            }
+        }
+        
+        viewModelScope.launch {
+            settingsRepo.todayPromptIsCustom.collect { isCustom ->
+                activePromptIsCustom.value = isCustom
+            }
+        }
+        
+        viewModelScope.launch {
             while (true) {
-                kotlinx.coroutines.delay(1000)
+                kotlinx.coroutines.delay(2000)
                 var nextRefreshTime = settingsRepo.nextRefreshTime.first()
                 val currentMode = settingsRepo.promptMode.first()
                 if (nextRefreshTime <= 0L) {
@@ -140,6 +154,7 @@ class MainViewModel(
         }
         
         settingsRepo.setNextRefreshTime(calendar.timeInMillis)
+        com.example.receiver.PromptAlarmReceiver.schedulePromptRefresh(context, calendar.timeInMillis)
     }
 
     private suspend fun checkAndSetTodayPrompt() {
@@ -180,6 +195,8 @@ class MainViewModel(
             settingsRepo.setTodayPrompt(currentStr, newPrompt, true)
             activePrompt.value = newPrompt
             activePromptIsCustom.value = true
+            
+            setupNextRefreshTime(settingsRepo.promptMode.first())
         }
     }
 
@@ -274,6 +291,7 @@ class MainViewModel(
                 activePrompt.value = newPrompt
                 activePromptIsCustom.value = false
                 dao.insertPromptHistory(com.example.data.PromptHistory(prompt = newPrompt, dateReceived = System.currentTimeMillis()))
+                setupNextRefreshTime(settingsRepo.promptMode.first())
             }
         }
     }
@@ -284,6 +302,44 @@ class MainViewModel(
             calendar.add(Calendar.DAY_OF_YEAR, -1)
         }
         return dateFormat.format(calendar.time)
+    }
+
+    fun calculateCurrentStreak(logs: List<ChallengeLog>): Int {
+        val officialLogs = logs.filter { !it.isCustomPrompt }
+        val uniqueDates = officialLogs.map { it.dateId }.distinct().sortedDescending()
+        if (uniqueDates.isEmpty()) return 0
+        
+        val todayStr = getCurrentDateString()
+        val calendar = Calendar.getInstance()
+        if (calendar.get(Calendar.HOUR_OF_DAY) < 6) {
+            calendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+        calendar.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterdayStr = dateFormat.format(calendar.time)
+        
+        if (uniqueDates.first() != todayStr && uniqueDates.first() != yesterdayStr) {
+            return 0
+        }
+        
+        var streak = 0
+        val evalCalendar = Calendar.getInstance()
+        if (evalCalendar.get(Calendar.HOUR_OF_DAY) < 6) {
+            evalCalendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+        if (uniqueDates.first() == yesterdayStr) {
+            evalCalendar.add(Calendar.DAY_OF_YEAR, -1)
+        }
+        
+        for (dateStr in uniqueDates) {
+            if (dateStr == dateFormat.format(evalCalendar.time)) {
+                streak++
+                evalCalendar.add(Calendar.DAY_OF_YEAR, -1)
+            } else {
+                break
+            }
+        }
+        
+        return streak
     }
 
     fun saveTodayPhoto(uri: Uri) {
@@ -325,8 +381,7 @@ class MainViewModel(
             
             val todayHasPlayed = allLogs.value.any { it.dateId == dateStr && !it.isCustomPrompt }
             if (!isCustom && !todayHasPlayed) {
-                val currentStreak = allLogs.value.filter { !it.isCustomPrompt }.map { it.dateId }.distinct().size
-                val newStreak = currentStreak + 1
+                val newStreak = calculateCurrentStreak(allLogs.value) + 1
                 if (newStreak == 7 || newStreak == 30 || newStreak == 100 || newStreak == 365) {
                     viewModelScope.launch {
                         kotlinx.coroutines.delay(2000)

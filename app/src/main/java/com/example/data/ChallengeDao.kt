@@ -11,6 +11,9 @@ interface ChallengeDao {
     @Query("SELECT * FROM challenge_log ORDER BY timestamp DESC")
     fun getAllLogs(): Flow<List<ChallengeLog>>
 
+    @Query("SELECT * FROM challenge_log ORDER BY timestamp DESC")
+    suspend fun getAllLogsSync(): List<ChallengeLog>
+
     @Query("SELECT * FROM challenge_log WHERE dateId = :dateId ORDER BY timestamp ASC")
     fun getLogsByDateFlow(dateId: String): Flow<List<ChallengeLog>>
 
@@ -19,6 +22,9 @@ interface ChallengeDao {
 
     @Query("SELECT * FROM prompt_history ORDER BY dateReceived DESC")
     fun getPromptHistory(): Flow<List<PromptHistory>>
+
+    @Query("SELECT * FROM prompt_history ORDER BY dateReceived DESC")
+    suspend fun getPromptHistorySync(): List<PromptHistory>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertPromptHistory(promptHistory: PromptHistory)
