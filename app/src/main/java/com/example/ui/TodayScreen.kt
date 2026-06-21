@@ -158,19 +158,29 @@ fun TodayScreen(viewModel: MainViewModel, onSwipeStateChange: (Boolean) -> Unit 
                             com.example.util.Haptics.softPulse()
                         }
                         androidx.compose.runtime.key(revealTrigger) {
-                            com.example.ui.components.AnimatedPromptText(
-                                text = "“$activePrompt”",
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    lineHeight = 28.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 32.dp),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                isDynamicColor = false,
-                                useAccentColors = useAccentColors
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (com.example.data.PromptDatabase.isRarePrompt(activePrompt)) {
+                                    Text(
+                                        text = "RARE PROMPT",
+                                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 2.sp, fontWeight = FontWeight.Medium),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                }
+                                com.example.ui.components.AnimatedPromptText(
+                                    text = "“$activePrompt”",
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        lineHeight = 28.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 32.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    isDynamicColor = false,
+                                    useAccentColors = useAccentColors
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(24.dp))
                     }
@@ -183,20 +193,30 @@ fun TodayScreen(viewModel: MainViewModel, onSwipeStateChange: (Boolean) -> Unit 
                             com.example.util.Haptics.softPulse()
                         }
                         androidx.compose.runtime.key(revealTrigger) {
-                            com.example.ui.components.AnimatedPromptText(
-                                text = "“$activePrompt”",
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontSize = 36.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    lineHeight = 48.sp,
-                                    letterSpacing = (-0.5).sp
-                                ),
-                                color = MaterialTheme.colorScheme.onBackground,
-                                modifier = Modifier.padding(horizontal = 32.dp),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                isDynamicColor = false,
-                                useAccentColors = useAccentColors
-                            )
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                if (com.example.data.PromptDatabase.isRarePrompt(activePrompt)) {
+                                    Text(
+                                        text = "RARE PROMPT",
+                                        style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 3.sp, fontWeight = FontWeight.Medium),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                        modifier = Modifier.padding(bottom = 16.dp)
+                                    )
+                                }
+                                com.example.ui.components.AnimatedPromptText(
+                                    text = "“$activePrompt”",
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontSize = 36.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        lineHeight = 48.sp,
+                                        letterSpacing = (-0.5).sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    modifier = Modifier.padding(horizontal = 32.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    isDynamicColor = false,
+                                    useAccentColors = useAccentColors
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.weight(1f))
                     }

@@ -105,6 +105,72 @@ fun showTestNotification(context: Context, activePrompt: String) {
     notificationManager.notify(1001, builder.build())
 }
 
+fun showReminderNotification(context: Context, activePrompt: String, nextRefreshTime: Long) {
+    createNotificationChannel(context)
+            
+    val intent = android.content.Intent(context, com.example.MainActivity::class.java).apply {
+        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+        putExtra("launched_from_notification", true)
+    }
+    val pendingIntent = android.app.PendingIntent.getActivity(
+        context, 1, intent,
+        android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+    )
+            
+    val drawable = androidx.core.content.ContextCompat.getDrawable(context, com.example.R.mipmap.ic_launcher)
+    val largeIconBitmap = if (drawable != null) {
+        val bmp = android.graphics.Bitmap.createBitmap(
+            Math.max(1, drawable.intrinsicWidth),
+            Math.max(1, drawable.intrinsicHeight),
+            android.graphics.Bitmap.Config.ARGB_8888
+        )
+        val canvas = android.graphics.Canvas(bmp)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        bmp
+    } else {
+        android.graphics.BitmapFactory.decodeResource(context.resources, com.example.R.mipmap.ic_launcher)
+    }
+    
+    val now = System.currentTimeMillis()
+    val diffHours = ((nextRefreshTime - now) / 1000 / 60 / 60).toLong()
+    val timeLabel = if (diffHours > 0) {
+        if (diffHours == 1L) "1 hour left" else "$diffHours hours left"
+    } else {
+        "Expiring soon"
+    }
+
+    val lowerPrompt = activePrompt.lowercase()
+    val body = when {
+        lowerPrompt.contains("archaeologist") -> "What would confuse them the most?"
+        lowerPrompt.contains("belong") -> "The world leaks little mistakes."
+        lowerPrompt.contains("story") -> "Stories don't usually announce themselves."
+        lowerPrompt.contains("shadow") -> "Look where the light ends."
+        lowerPrompt.contains("color") -> "Everything has a palette if you squint."
+        lowerPrompt.contains("time") -> "Time only leaves footprints."
+        lowerPrompt.contains("quiet") || lowerPrompt.contains("stillness") -> "Has the noise stopped yet?"
+        lowerPrompt.contains("look up") -> "If you haven't looked up lately, now is a good time."
+        lowerPrompt.contains("mistake") || lowerPrompt.contains("flaw") -> "Perfection is mostly boring anyway."
+        lowerPrompt.contains("mystery") || lowerPrompt.contains("secret") -> "Some things want to be found."
+        else -> "Remember, it's about observation, not perfection."
+    }
+
+    val style = NotificationCompat.BigTextStyle().bigText(body)
+
+    val builder = NotificationCompat.Builder(context, "MORROW_CHANNEL")
+        .setSmallIcon(com.example.R.drawable.ic_launcher_foreground)
+        .setLargeIcon(largeIconBitmap)
+        .setContentTitle(timeLabel)
+        .setContentText(body)
+        .setStyle(style)
+        .setContentIntent(pendingIntent)
+        .setPriority(NotificationCompat.PRIORITY_LOW) // Reminders are lower priority implicitly
+        .setAutoCancel(true)
+
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    notificationManager.notify(1002, builder.build())
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
@@ -114,6 +180,7 @@ fun SettingsScreen(viewModel: MainViewModel) {
     val haptic = LocalHapticFeedback.current
     
     val notificationsEnabled by settingsRepo.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val remindersEnabled by settingsRepo.remindersEnabled.collectAsStateWithLifecycle(initialValue = false)
     val allLogs by viewModel.allLogs.collectAsStateWithLifecycle()
     val activePrompt by viewModel.activePrompt.collectAsStateWithLifecycle()
     val promptHistory by viewModel.promptHistory.collectAsStateWithLifecycle()
@@ -386,6 +453,40 @@ fun SettingsScreen(viewModel: MainViewModel) {
                                 }
                                 coroutineScope.launch {
                                     settingsRepo.setNotificationsEnabled(isChecked)
+                                }
+                            }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 16.dp)) {
+                            Text("Prompt Reminders", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Occasional nudges throughout the day if the challenge isn't completed.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(
+                            checked = remindersEnabled,
+                            onCheckedChange = { isChecked ->
+                                com.example.util.Haptics.softPulse()
+                                if (isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        return@Switch
+                                    }
+                                }
+                                coroutineScope.launch {
+                                    settingsRepo.setRemindersEnabled(isChecked)
+                                    if (isChecked) {
+                                        com.example.receiver.PromptAlarmReceiver.scheduleNextReminder(context)
+                                    } else {
+                                        com.example.receiver.PromptAlarmReceiver.cancelNextReminder(context)
+                                    }
                                 }
                             }
                         )

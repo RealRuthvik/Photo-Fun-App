@@ -390,6 +390,7 @@ class MainViewModel(
                         com.example.util.Haptics.strongPulse()
                     }
                 }
+                com.example.receiver.PromptAlarmReceiver.cancelNextReminder(context)
             }
             
             dao.insertLog(log)

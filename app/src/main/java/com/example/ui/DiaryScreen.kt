@@ -292,12 +292,14 @@ fun DayViewDialog(dayLogs: List<ChallengeLog>, onDismiss: () -> Unit) {
                 
                 val logsByPrompt = remember(dayLogs) { dayLogs.groupBy { it.prompt } }
                 
-                LazyColumn(
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(2),
                     modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
                     contentPadding = PaddingValues(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(32.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalItemSpacing = 16.dp
                 ) {
-                    item {
+                    item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
                         Text(
                             text = displayDate,
                             style = MaterialTheme.typography.labelMedium,
@@ -307,8 +309,8 @@ fun DayViewDialog(dayLogs: List<ChallengeLog>, onDismiss: () -> Unit) {
                     }
                     
                     logsByPrompt.forEach { (prompt, sessionLogs) ->
-                        item {
-                            Column {
+                        item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                            Column(modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
                                 val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
                                 val firstLogTime = timeFormat.format(java.util.Date(sessionLogs.first().timestamp))
                                 
@@ -332,37 +334,19 @@ fun DayViewDialog(dayLogs: List<ChallengeLog>, onDismiss: () -> Unit) {
                                     isStatic = true,
                                     useAccentColors = true
                                 )
-                                
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                // Internal grid for session logs
-                                val columns = 3
-                                val rows = (sessionLogs.size + columns - 1) / columns
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    for (r in 0 until rows) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            for (c in 0 until columns) {
-                                                val i = r * columns + c
-                                                if (i < sessionLogs.size) {
-                                                    val log = sessionLogs[i]
-                                                    AsyncImage(
-                                                        model = log.imagePath,
-                                                        contentDescription = null,
-                                                        contentScale = ContentScale.Crop,
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .aspectRatio(1f)
-                                                            .clip(RoundedCornerShape(8.dp))
-                                                            .clickable { selectedLog = log }
-                                                    )
-                                                } else {
-                                                    Spacer(modifier = Modifier.weight(1f).aspectRatio(1f))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                             }
+                        }
+                        
+                        staggeredItems(sessionLogs) { log ->
+                            AsyncImage(
+                                model = log.imagePath,
+                                contentDescription = null,
+                                contentScale = ContentScale.FillWidth,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { selectedLog = log }
+                            )
                         }
                     }
                 }

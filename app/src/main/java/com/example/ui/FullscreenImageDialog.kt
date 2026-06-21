@@ -47,21 +47,20 @@ fun FullscreenImageDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 24.dp)
-                    .padding(top = 64.dp, bottom = 24.dp),
+                    .padding(top = 64.dp, bottom = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Top
             ) {
-                AsyncImage(
+                Spacer(modifier = Modifier.weight(1f))
+                com.example.ui.ZoomableImage(
                     model = log.imagePath,
-                    contentDescription = null,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false)
-                        .clip(RoundedCornerShape(16.dp)),
-                    contentScale = ContentScale.Fit
+                        .weight(8f, fill = false)
+                        .clip(RoundedCornerShape(16.dp))
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(32.dp))
                 
                 val timeStr = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(log.timestamp))
                 Text(
@@ -79,6 +78,7 @@ fun FullscreenImageDialog(
                     isDynamicColor = false,
                     useAccentColors = true
                 )
+                Spacer(modifier = Modifier.weight(2f))
             }
             
             Row(

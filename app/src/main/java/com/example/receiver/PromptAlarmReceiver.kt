@@ -40,6 +40,38 @@ class PromptAlarmReceiver : BroadcastReceiver() {
                     if (nextRefreshTimeStr > 0) {
                         schedulePromptRefresh(context, nextRefreshTimeStr)
                     }
+                    
+                    val remindersEnabled = settingsRepo.remindersEnabled.first()
+                    if (remindersEnabled) {
+                        scheduleNextReminder(context)
+                    }
+                    return@launch
+                }
+                
+                if (action == "com.example.REMINDER_FIRED") {
+                    val remindersEnabled = settingsRepo.remindersEnabled.first()
+                    if (remindersEnabled) {
+                        val db = AppDatabase.getDatabase(context)
+                        val dao = db.challengeDao()
+                        val calendar = Calendar.getInstance()
+                        if (calendar.get(Calendar.HOUR_OF_DAY) < 6) {
+                            calendar.add(Calendar.DAY_OF_YEAR, -1)
+                        }
+                        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                        val todayStr = dateFormat.format(calendar.time)
+                        
+                        val allLogs = dao.getAllLogsSync()
+                        val hasTakenPhotoToday = allLogs.any { it.dateId == todayStr }
+                        if (!hasTakenPhotoToday) {
+                            val activePrompt = settingsRepo.todayPrompt.first()
+                            val nextRefreshTimeStr = settingsRepo.nextRefreshTime.first()
+                            if (activePrompt != null && nextRefreshTimeStr > System.currentTimeMillis()) {
+                                com.example.ui.showReminderNotification(context, activePrompt, nextRefreshTimeStr)
+                                // Schedule next reminder in 4 hours
+                                scheduleNextReminder(context)
+                            }
+                        }
+                    }
                     return@launch
                 }
                 
@@ -74,6 +106,11 @@ class PromptAlarmReceiver : BroadcastReceiver() {
                     val nextTime = calculateNextRefreshTime(currentMode)
                     settingsRepo.setNextRefreshTime(nextTime)
                     schedulePromptRefresh(context, nextTime)
+                    
+                    val remindersEnabled = settingsRepo.remindersEnabled.first()
+                    if (remindersEnabled) {
+                        scheduleNextReminder(context)
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -188,6 +225,50 @@ class PromptAlarmReceiver : BroadcastReceiver() {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
             val pendingIntent = PendingIntent.getBroadcast(context, 1001, intent, flag)
+            alarmManager.cancel(pendingIntent)
+        }
+
+        fun scheduleNextReminder(context: Context) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, PromptAlarmReceiver::class.java).apply {
+                action = "com.example.REMINDER_FIRED"
+            }
+            val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = PendingIntent.getBroadcast(context, 1003, intent, flag)
+            
+            // Generate a random-ish noise for reminder or just 4 hours.
+            val triggerAtMillis = System.currentTimeMillis() + 4 * 60 * 60 * 1000L
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent
+                )
+            }
+        }
+        
+        fun cancelNextReminder(context: Context) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, PromptAlarmReceiver::class.java).apply {
+                action = "com.example.REMINDER_FIRED"
+            }
+            val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = PendingIntent.getBroadcast(context, 1003, intent, flag)
             alarmManager.cancel(pendingIntent)
         }
     }

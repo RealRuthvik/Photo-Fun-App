@@ -16,6 +16,7 @@ class SettingsRepository(private val context: Context) {
 
     companion object {
         val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
         val PROMPT_MODE = androidx.datastore.preferences.core.stringPreferencesKey("prompt_mode")
         val NEXT_REFRESH_TIME = longPreferencesKey("next_refresh_time")
         val WINDOW_START_HOUR = longPreferencesKey("window_start_hour")
@@ -76,6 +77,11 @@ class SettingsRepository(private val context: Context) {
             preferences[NOTIFICATIONS_ENABLED] ?: true
         }
 
+    val remindersEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[REMINDERS_ENABLED] ?: false
+        }
+
     val windowStartHour: Flow<Int> = context.dataStore.data
         .map { preferences ->
             (preferences[WINDOW_START_HOUR] ?: 9L).toInt() // Default 9 AM
@@ -89,6 +95,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[NOTIFICATIONS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setRemindersEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[REMINDERS_ENABLED] = enabled
         }
     }
 
